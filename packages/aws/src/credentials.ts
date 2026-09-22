@@ -1,13 +1,19 @@
 import {
   AssumeRoleCommand,
   STSClient,
-  type Credentials,
 } from "@aws-sdk/client-sts";
 
 import type { ManagedStage } from "@gatehouse/core";
 
+type StageCredentials = {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken: string;
+  expiration?: Date;
+};
+
 type CachedCredentials = {
-  credentials: Credentials;
+  credentials: StageCredentials;
   expiresAt: number;
 };
 
@@ -68,7 +74,7 @@ export function credentialsForStage(stage: ManagedStage) {
       );
     }
 
-    const credentials: Credentials = {
+    const credentials: StageCredentials = {
       accessKeyId: assumed.AccessKeyId,
       secretAccessKey: assumed.SecretAccessKey,
       sessionToken: assumed.SessionToken,
