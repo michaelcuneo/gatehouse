@@ -100,6 +100,15 @@
         </div>
 
         <div class="field">
+          <label for="logGroups">CloudWatch log groups</label>
+          <input
+            id="logGroups"
+            name="logGroups"
+            placeholder="/aws/lambda/my-api, /aws/lambda/my-worker"
+          />
+        </div>
+
+        <div class="field">
           <label for="diagnosticsProfile">Diagnostics profile</label>
           <input
             id="diagnosticsProfile"
