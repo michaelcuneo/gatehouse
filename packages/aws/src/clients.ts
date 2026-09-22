@@ -1,0 +1,31 @@
+import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
+import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { LambdaClient } from "@aws-sdk/client-lambda";
+import { STSClient } from "@aws-sdk/client-sts";
+
+import type { ManagedStage } from "@gatehouse/core";
+
+import { credentialsForStage } from "./credentials";
+
+function configForStage(stage: ManagedStage, region = stage.primaryRegion) {
+  return {
+    region,
+    credentials: credentialsForStage(stage),
+  };
+}
+
+export function awsClientsForStage(
+  stage: ManagedStage,
+  region = stage.primaryRegion,
+) {
+  const config = configForStage(stage, region);
+
+  return {
+    cloudWatch: new CloudWatchClient(config),
+    logs: new CloudWatchLogsClient(config),
+    dynamoDB: new DynamoDBClient(config),
+    lambda: new LambdaClient(config),
+    sts: new STSClient(config),
+  };
+}
