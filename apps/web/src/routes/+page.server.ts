@@ -25,6 +25,10 @@ export const actions: Actions = {
     const region = text(form, 'region') || 'ap-southeast-2';
     const roleArn = text(form, 'roleArn');
     const diagnosticsProfile = text(form, 'diagnosticsProfile');
+    const logGroups = text(form, 'logGroups')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
 
     if (!name || !slug || !accountId) {
       return fail(400, {
@@ -74,6 +78,14 @@ export const actions: Actions = {
             ...defaultProjectCapabilities,
             diagnostics: Boolean(diagnosticsProfile)
           },
+          selectors: logGroups.length
+            ? [
+                {
+                  kind: 'log-group',
+                  names: logGroups
+                }
+              ]
+            : [],
           enabled: true
         }
       ]
