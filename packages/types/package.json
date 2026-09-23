@@ -1,5 +1,5 @@
 {
-  "name": "@gatehouse/shell",
+  "name": "@gatehouse/types",
   "private": true,
   "type": "module",
   "exports": {
