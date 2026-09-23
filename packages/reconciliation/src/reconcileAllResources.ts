@@ -1,11 +1,13 @@
 import { listResources } from "@gatehouse/resources";
 
-import { reconcileResource } from "./reconcileResource";
+import { planReconciliation } from "./planReconciliation";
+import { reconcilePlannedResource } from "./reconcileResource";
 
 export async function reconcileAllResources(): Promise<void> {
   const resources = listResources();
+  const plan = planReconciliation(resources);
 
-  for (const resource of resources) {
-    await reconcileResource(resource.id);
+  for (const resource of plan) {
+    await reconcilePlannedResource(resource);
   }
 }
