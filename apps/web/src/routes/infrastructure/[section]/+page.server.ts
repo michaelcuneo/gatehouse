@@ -105,6 +105,8 @@ export const actions: Actions = {
       const portName = text(form, 'portName') || 'http';
       const port = Number(text(form, 'port'));
       const protocol = serviceProtocol(text(form, 'protocol') || 'http');
+      const healthPath = text(form, 'healthPath');
+      const healthInterval = Number(text(form, 'healthInterval') || 60);
 
       if (!runtime) {
         return fail(400, { error: 'A valid service runtime is required.' });
@@ -122,6 +124,15 @@ export const actions: Actions = {
 
       if (!protocol) {
         return fail(400, { error: 'A valid port protocol is required.' });
+      }
+
+      if (
+        healthPath &&
+        (!Number.isFinite(healthInterval) || healthInterval < 10)
+      ) {
+        return fail(400, {
+          error: 'Health interval must be at least 10 seconds.'
+        });
       }
 
       resource = {
@@ -149,7 +160,13 @@ export const actions: Actions = {
               protocol
             }
           ],
-          autoStart: form.get('autoStart') === 'on'
+          autoStart: form.get('autoStart') === 'on',
+          healthcheck: healthPath
+            ? {
+                path: healthPath,
+                intervalSeconds: healthInterval
+              }
+            : undefined
         }
       };
     } else if (params.section === 'storage') {
