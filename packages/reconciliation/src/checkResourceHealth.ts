@@ -56,10 +56,42 @@ export async function checkResourceHealth(
   return result.healthy;
 }
 
+function healthIntervalSeconds(
+  resource: ReturnType<typeof listResources>[number],
+): number {
+  if (resource.kind === "service" && resource.spec.healthcheck) {
+    return Math.max(resource.spec.healthcheck.intervalSeconds, 10);
+  }
+
+  return 60;
+}
+
+function healthCheckIsDue(
+  resource: ReturnType<typeof listResources>[number],
+  now: number,
+): boolean {
+  const last = resource.runtime?.lastHealthCheckAt;
+
+  if (!last) {
+    return true;
+  }
+
+  const lastTime = Date.parse(last);
+
+  if (!Number.isFinite(lastTime)) {
+    return true;
+  }
+
+  return now - lastTime >= healthIntervalSeconds(resource) * 1000;
+}
+
 export async function checkAllResourceHealth(): Promise<void> {
   const resources = listResources();
+  const now = Date.now();
 
   await Promise.allSettled(
-    resources.map((resource) => checkResourceHealth(resource.id)),
+    resources
+      .filter((resource) => healthCheckIsDue(resource, now))
+      .map((resource) => checkResourceHealth(resource.id)),
   );
 }
