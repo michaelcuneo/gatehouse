@@ -4,4 +4,6 @@ export interface Provider {
   name: Resource["provider"];
 
   reconcile(resource: Resource): Promise<void>;
+
+  destroy?(resource: Resource): Promise<void>;
 }
