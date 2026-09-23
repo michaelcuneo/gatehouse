@@ -40,6 +40,30 @@ function text(form: FormData, key: string) {
   return String(form.get(key) ?? '').trim();
 }
 
+function serviceRuntime(value: string) {
+  switch (value) {
+    case 'node':
+    case 'bun':
+    case 'docker':
+    case 'python':
+    case 'binary':
+      return value;
+    default:
+      return null;
+  }
+}
+
+function serviceProtocol(value: string) {
+  switch (value) {
+    case 'http':
+    case 'https':
+    case 'tcp':
+      return value;
+    default:
+      return null;
+  }
+}
+
 export const load: PageServerLoad = async ({ params }) => {
   const section = sections[params.section];
 
@@ -74,15 +98,15 @@ export const actions: Actions = {
     let resource: Resource;
 
     if (params.section === 'services') {
-      const runtime = text(form, 'runtime');
+      const runtime = serviceRuntime(text(form, 'runtime'));
       const workingDirectory = text(form, 'workingDirectory');
       const startCommand = text(form, 'startCommand');
       const envFile = text(form, 'envFile');
       const portName = text(form, 'portName') || 'http';
       const port = Number(text(form, 'port'));
-      const protocol = text(form, 'protocol') || 'http';
+      const protocol = serviceProtocol(text(form, 'protocol') || 'http');
 
-      if (!['node', 'bun', 'docker', 'python', 'binary'].includes(runtime)) {
+      if (!runtime) {
         return fail(400, { error: 'A valid service runtime is required.' });
       }
 
@@ -96,7 +120,7 @@ export const actions: Actions = {
         return fail(400, { error: 'A valid service port is required.' });
       }
 
-      if (!['http', 'https', 'tcp'].includes(protocol)) {
+      if (!protocol) {
         return fail(400, { error: 'A valid port protocol is required.' });
       }
 
