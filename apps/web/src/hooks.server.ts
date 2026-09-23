@@ -7,14 +7,14 @@ let healthTimer: ReturnType<typeof setInterval> | null = null;
 
 function healthIntervalMs() {
   const configured = Number(
-    process.env.GATEHOUSE_HEALTH_INTERVAL_SECONDS ?? 60
+    process.env.GATEHOUSE_HEALTH_MONITOR_TICK_SECONDS ?? 10
   );
 
   if (!Number.isFinite(configured) || configured <= 0) {
     return null;
   }
 
-  return Math.max(configured, 10) * 1000;
+  return Math.max(configured, 5) * 1000;
 }
 
 function startHealthMonitor() {
