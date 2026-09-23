@@ -15,6 +15,7 @@
   "dependencies": {
     "@gatehouse/types": "workspace:*",
     "@gatehouse/runtime": "workspace:*",
-    "@gatehouse/core": "workspace:*"
+    "@gatehouse/core": "workspace:*",
+    "@gatehouse/aws": "workspace:*"
   }
 }
