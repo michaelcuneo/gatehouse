@@ -43,22 +43,23 @@ async function listDirectory(directory: string) {
 }
 
 export const load: PageServerLoad = async () => {
-  const [nginx, certificates, state] = await Promise.all([
-    listDirectory(GENERATED_NGINX_DIR),
-    listDirectory(GENERATED_CERT_DIR),
-    listDirectory(GENERATED_STATE_DIR)
+  const groups = await Promise.all([
+    listDirectory(GENERATED_NGINX_DIR).then((files) => ({
+      name: 'nginx',
+      directory: GENERATED_NGINX_DIR,
+      files
+    })),
+    listDirectory(GENERATED_CERT_DIR).then((files) => ({
+      name: 'certificates',
+      directory: GENERATED_CERT_DIR,
+      files
+    })),
+    listDirectory(GENERATED_STATE_DIR).then((files) => ({
+      name: 'state',
+      directory: GENERATED_STATE_DIR,
+      files
+    }))
   ]);
 
-  return {
-    directories: {
-      nginx: GENERATED_NGINX_DIR,
-      certificates: GENERATED_CERT_DIR,
-      state: GENERATED_STATE_DIR
-    },
-    generated: {
-      nginx,
-      certificates,
-      state
-    }
-  };
+  return { groups };
 };
