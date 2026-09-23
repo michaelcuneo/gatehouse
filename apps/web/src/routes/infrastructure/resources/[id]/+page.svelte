@@ -31,7 +31,7 @@
       <h2>Reconciliation</h2>
       <dl class="detail-list">
         <div><dt>Healthy</dt><dd>{data.resource.runtime?.healthy === true ? 'Yes' : data.resource.runtime?.healthy === false ? 'No' : 'Unknown'}</dd></div>
-        <div><dt>Last reconciled</dt><dd>{date(data.resource.runtime?.lastReconciledAt as string | undefined)}</dd></div>
+        <div><dt>Last reconciled</dt><dd>{date(data.resource.runtime?.lastReconciledAt)}</dd></div>
         <div><dt>Status</dt><dd>{data.resource.runtime?.lastStatusMessage ?? 'No runtime status yet'}</dd></div>
       </dl>
       {#if data.resource.runtime?.lastError}

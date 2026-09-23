@@ -43,7 +43,7 @@
                     ? 'Unhealthy'
                     : 'Unknown'}
               </td>
-              <td class="muted">{date(resource.runtime?.lastReconciledAt as string | undefined)}</td>
+              <td class="muted">{date(resource.runtime?.lastReconciledAt)}</td>
               <td class="muted">{resource.runtime?.lastStatusMessage ?? '—'}</td>
             </tr>
           {/each}

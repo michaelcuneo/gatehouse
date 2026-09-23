@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ params }) => {
       ...context,
       resources,
       aws: {
-        ok: true,
+        ok: true as const,
         identity
       }
     };
@@ -29,7 +29,7 @@ export const load: PageServerLoad = async ({ params }) => {
       ...context,
       resources,
       aws: {
-        ok: false,
+        ok: false as const,
         error: cause instanceof Error ? cause.message : String(cause)
       }
     };

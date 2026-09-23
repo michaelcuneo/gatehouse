@@ -4,11 +4,12 @@
   "type": "module",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "pnpm --filter @gatehouse/web dev",
     "build": "turbo run build",
     "check": "turbo run check",
     "lint": "turbo run lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "dev:turbo": "turbo run dev"
   },
   "devDependencies": {
     "turbo": "latest",

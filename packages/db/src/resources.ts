@@ -15,6 +15,21 @@ export type StoredResourceKind =
   | "storage_bucket"
   | "static_site";
 
+export interface StoredResourceMetadata {
+  description?: string;
+  tags?: string[];
+  managed?: boolean;
+  [key: string]: unknown;
+}
+
+export interface StoredResourceRuntime {
+  lastReconciledAt?: string;
+  lastError?: string;
+  lastStatusMessage?: string;
+  healthy?: boolean;
+  [key: string]: unknown;
+}
+
 export interface StoredResource<TSpec = unknown> {
   id: string;
   kind: StoredResourceKind;
@@ -24,8 +39,8 @@ export interface StoredResource<TSpec = unknown> {
   status: StoredResourceStatus;
   version: number;
   spec: TSpec;
-  metadata?: Record<string, unknown>;
-  runtime?: Record<string, unknown>;
+  metadata?: StoredResourceMetadata;
+  runtime?: StoredResourceRuntime;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,16 +80,16 @@ function fromRow<TSpec = unknown>(row: ResourceRow): StoredResource<TSpec> {
     status: row.status,
     version: row.version,
     spec: parseJson<TSpec>(row.spec, {} as TSpec),
-    metadata: parseJson<Record<string, unknown> | undefined>(row.metadata, undefined),
-    runtime: parseJson<Record<string, unknown> | undefined>(row.runtime, undefined),
+    metadata: parseJson<StoredResourceMetadata | undefined>(row.metadata, undefined),
+    runtime: parseJson<StoredResourceRuntime | undefined>(row.runtime, undefined),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-export function listResources(
+export function listResources<TSpec = unknown>(
   kind?: StoredResourceKind,
-): StoredResource[] {
+): StoredResource<TSpec>[] {
   const db = getDatabase();
 
   const rows = kind
@@ -89,7 +104,7 @@ export function listResources(
         )
         .all() as ResourceRow[]);
 
-  return rows.map((row) => fromRow(row));
+  return rows.map((row) => fromRow<TSpec>(row));
 }
 
 export function getResource<TSpec = unknown>(
@@ -161,7 +176,7 @@ export function updateResourceState(
   patch: {
     status?: StoredResourceStatus;
     enabled?: boolean;
-    runtime?: Record<string, unknown>;
+    runtime?: Partial<StoredResourceRuntime>;
     updatedAt?: string;
   },
 ) {
