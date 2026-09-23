@@ -6,15 +6,39 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@gatehouse/core": ["packages/core/src"],
-      "@gatehouse/resources": ["packages/resources/src"],
-      "@gatehouse/reconciliation": ["packages/reconciliation/src"],
-      "@gatehouse/providers": ["packages/providers/src"],
-      "@gatehouse/runtime": ["packages/runtime/src"],
-      "@gatehouse/shell": ["packages/shell/src"],
-      "@gatehouse/db": ["packages/db/src"],
-      "@gatehouse/aws": ["packages/aws/src"],
-      "@gatehouse/validation": ["packages/validation/src"]
-    }
+      "@gatehouse/core": [
+        "packages/core/src"
+      ],
+      "@gatehouse/resources": [
+        "packages/resources/src"
+      ],
+      "@gatehouse/reconciliation": [
+        "packages/reconciliation/src"
+      ],
+      "@gatehouse/providers": [
+        "packages/providers/src"
+      ],
+      "@gatehouse/runtime": [
+        "packages/runtime/src"
+      ],
+      "@gatehouse/shell": [
+        "packages/shell/src"
+      ],
+      "@gatehouse/db": [
+        "packages/db/src"
+      ],
+      "@gatehouse/aws": [
+        "packages/aws/src"
+      ],
+      "@gatehouse/validation": [
+        "packages/validation/src"
+      ],
+      "@gatehouse/types": [
+        "packages/types/src"
+      ]
+    },
+    "types": [
+      "node"
+    ]
   }
 }
