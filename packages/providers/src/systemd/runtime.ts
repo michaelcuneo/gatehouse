@@ -33,6 +33,7 @@ async function runHelper(command: string | null, args: string[]): Promise<void> 
 export async function applyServiceUnit(
   resourceId: string,
   unit: string,
+  autoStart: boolean,
 ): Promise<void> {
   const target = await writeServiceUnit(resourceId, unit);
   const filename = serviceUnitFilename(resourceId);
@@ -42,7 +43,7 @@ export async function applyServiceUnit(
       "GATEHOUSE_SERVICE_APPLY_COMMAND",
       "/usr/local/bin/gatehouse-service-apply",
     ),
-    [target, filename],
+    [target, filename, autoStart ? "1" : "0"],
   );
 }
 
