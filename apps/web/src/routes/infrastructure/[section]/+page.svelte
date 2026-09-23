@@ -157,6 +157,26 @@
               </select>
             </div>
 
+            <div class="field">
+              <label for="healthPath">Health path</label>
+              <input
+                id="healthPath"
+                name="healthPath"
+                placeholder="/healthz"
+              />
+            </div>
+
+            <div class="field">
+              <label for="healthInterval">Health interval (seconds)</label>
+              <input
+                id="healthInterval"
+                name="healthInterval"
+                type="number"
+                min="10"
+                value="60"
+              />
+            </div>
+
             <label class="check-field">
               <input name="autoStart" type="checkbox" checked />
               Start automatically
