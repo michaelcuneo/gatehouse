@@ -48,7 +48,7 @@
               <td><span class={`status status-${endpoint.status}`}>{endpoint.status}</span></td>
               <td class="muted">
                 {endpoint.runtime?.lastReconciledAt
-                  ? date(endpoint.runtime.lastReconciledAt as string)
+                  ? date(endpoint.runtime.lastReconciledAt)
                   : 'Never'}
               </td>
             </tr>
