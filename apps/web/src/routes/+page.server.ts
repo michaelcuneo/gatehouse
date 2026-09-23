@@ -69,7 +69,7 @@ export const actions: Actions = {
             ? {
                 mode: 'assume-role',
                 roleArn,
-                sourceIdentity: 'gatehouse-console'
+                sourceIdentity: 'gatehouse'
               }
             : {
                 mode: 'default'
