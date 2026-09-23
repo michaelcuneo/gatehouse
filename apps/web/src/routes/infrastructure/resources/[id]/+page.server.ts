@@ -5,7 +5,10 @@ import {
   getResource,
   updateResourceState
 } from '@gatehouse/db';
-import { reconcileResource } from '@gatehouse/reconciliation';
+import {
+  checkResourceHealth,
+  reconcileResource
+} from '@gatehouse/reconciliation';
 
 export const load: PageServerLoad = async ({ params }) => {
   const resource = getResource(params.id);
@@ -22,6 +25,17 @@ export const actions: Actions = {
     try {
       await reconcileResource(params.id);
       return { success: true, action: 'reconcile' };
+    } catch (cause) {
+      return fail(500, {
+        error: cause instanceof Error ? cause.message : String(cause)
+      });
+    }
+  },
+
+  health: async ({ params }) => {
+    try {
+      await checkResourceHealth(params.id);
+      return { success: true, action: 'health' };
     } catch (cause) {
       return fail(500, {
         error: cause instanceof Error ? cause.message : String(cause)
