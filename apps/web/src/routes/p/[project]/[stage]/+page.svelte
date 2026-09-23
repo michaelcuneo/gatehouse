@@ -1,7 +1,7 @@
 <script lang="ts">
   let { data } = $props();
 
-  const base = `/p/${data.project.slug}/${data.stage.name}`;
+  const base = $derived(`/p/${data.project.slug}/${data.stage.name}`);
 
   type ProjectNavItem = {
     label: string;
@@ -9,7 +9,7 @@
     enabled: boolean;
   };
 
-  const nav: ProjectNavItem[] = [
+  const nav = $derived<ProjectNavItem[]>([
     { label: 'Overview', href: base, enabled: true },
     { label: 'Logs', href: `${base}/logs`, enabled: data.stage.capabilities.logs },
     { label: 'Errors', href: `${base}/errors`, enabled: data.stage.capabilities.errors },
@@ -22,7 +22,7 @@
     { label: 'AI Usage', href: `${base}/ai`, enabled: data.stage.capabilities.aiUsage },
     { label: 'Auth', href: `${base}/auth`, enabled: data.stage.capabilities.auth },
     { label: 'Diagnostics', href: `${base}/diagnostics`, enabled: data.stage.capabilities.diagnostics }
-  ].filter((item) => item.enabled);
+  ].filter((item) => item.enabled));
 </script>
 
 <main class="container">
