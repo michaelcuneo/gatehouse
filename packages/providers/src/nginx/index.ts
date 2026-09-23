@@ -1,10 +1,14 @@
 import type { Provider } from "../types";
 
-import { reconcileNginxResource } from "./reconcile";
+import {
+  destroyNginxResource,
+  reconcileNginxResource,
+} from "./reconcile";
 
 export const nginxProvider: Provider = {
   name: "nginx",
   reconcile: reconcileNginxResource,
+  destroy: destroyNginxResource,
 };
 
 export * from "./validate";
