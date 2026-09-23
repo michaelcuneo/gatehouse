@@ -9,6 +9,14 @@
     "build": "tsc --noEmit",
     "check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.0.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-lambda": "^3.0.0",
+    "@aws-sdk/client-sts": "^3.0.0",
+    "@gatehouse/core": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.8.3"
   }

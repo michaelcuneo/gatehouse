@@ -1,5 +1,5 @@
 {
-  "name": "@gatehouse/db",
+  "name": "@gatehouse/observability",
   "private": true,
   "type": "module",
   "exports": {
@@ -9,12 +9,12 @@
     "build": "tsc --noEmit",
     "check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
+    "@gatehouse/aws": "workspace:*",
+    "@gatehouse/core": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "@gatehouse/core": "workspace:*",
-    "@gatehouse/runtime": "workspace:*",
-    "better-sqlite3": "^12.10.0"
   }
 }
