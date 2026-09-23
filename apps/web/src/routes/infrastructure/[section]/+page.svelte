@@ -63,14 +63,16 @@
     {/if}
   </section>
 
-  {#if data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
+  {#if data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
     <div class="section-head">
       <div>
         <span class="eyebrow">Desired state</span>
         <h2>
-          {data.section.kind === 'storage_bucket'
-            ? 'Create local storage'
-            : 'Create static deployment'}
+          {data.section.kind === 'service'
+            ? 'Create managed service'
+            : data.section.kind === 'storage_bucket'
+              ? 'Create local storage'
+              : 'Create static deployment'}
         </h2>
       </div>
     </div>
@@ -87,7 +89,79 @@
             <input id="name" name="name" required />
           </div>
 
-          {#if data.section.kind === 'storage_bucket'}
+          {#if data.section.kind === 'service'}
+            <div class="field">
+              <label for="runtime">Runtime</label>
+              <select id="runtime" name="runtime">
+                <option value="node">Node</option>
+                <option value="bun">Bun</option>
+                <option value="python">Python</option>
+                <option value="docker">Docker</option>
+                <option value="binary">Binary</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="workingDirectory">Working directory</label>
+              <input
+                id="workingDirectory"
+                name="workingDirectory"
+                placeholder="apps/api"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="startCommand">Start command</label>
+              <input
+                id="startCommand"
+                name="startCommand"
+                placeholder="pnpm start"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="envFile">Environment file</label>
+              <input
+                id="envFile"
+                name="envFile"
+                placeholder=".env"
+              />
+            </div>
+
+            <div class="field">
+              <label for="portName">Port name</label>
+              <input id="portName" name="portName" value="http" />
+            </div>
+
+            <div class="field">
+              <label for="port">Port</label>
+              <input
+                id="port"
+                name="port"
+                type="number"
+                min="1"
+                max="65535"
+                placeholder="3000"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="protocol">Protocol</label>
+              <select id="protocol" name="protocol">
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="tcp">TCP</option>
+              </select>
+            </div>
+
+            <label class="check-field">
+              <input name="autoStart" type="checkbox" checked />
+              Start automatically
+            </label>
+          {:else if data.section.kind === 'storage_bucket'}
             <div class="field">
               <label for="path">Local path</label>
               <input
@@ -147,9 +221,11 @@
 
         <div class="actions">
           <button class="button" type="submit">
-            {data.section.kind === 'storage_bucket'
-              ? 'Create and reconcile'
-              : 'Deploy static site'}
+            {data.section.kind === 'service'
+              ? 'Create service'
+              : data.section.kind === 'storage_bucket'
+                ? 'Create and reconcile'
+                : 'Deploy static site'}
           </button>
         </div>
       </form>
