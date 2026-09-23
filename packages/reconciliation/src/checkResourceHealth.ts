@@ -5,6 +5,8 @@ import {
   listResources,
 } from "@gatehouse/resources";
 
+import { providerContextForResource } from "./providerContext";
+
 export async function checkResourceHealth(
   resourceId: string,
 ): Promise<boolean | null> {
@@ -41,7 +43,8 @@ export async function checkResourceHealth(
     return null;
   }
 
-  const result = await provider.health(resource);
+  const context = providerContextForResource(resource.id);
+  const result = await provider.health(resource, context);
 
   updateResourceState(resource.id, {
     runtime: {
