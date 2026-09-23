@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+
 import type { Resource } from "@gatehouse/types";
 
 import {
@@ -63,5 +65,42 @@ export async function destroyFilesystemResource(
     }
 
     return;
+  }
+}
+
+
+export async function healthFilesystemResource(resource: Resource) {
+  validateFilesystemResource(resource);
+
+  const target =
+    resource.kind === "storage_bucket"
+      ? resource.spec.provider === "local"
+        ? filesystemPath(resource.spec.path)
+        : null
+      : resource.kind === "static_site"
+        ? filesystemPath(resource.spec.outputDirectory)
+        : null;
+
+  if (!target) {
+    return {
+      healthy: false,
+      message: "Filesystem resource does not resolve to a local path",
+    };
+  }
+
+  try {
+    const stat = await fs.stat(target);
+
+    return {
+      healthy: stat.isDirectory(),
+      message: stat.isDirectory()
+        ? `Managed directory exists: ${target}`
+        : `Managed path is not a directory: ${target}`,
+    };
+  } catch (cause) {
+    return {
+      healthy: false,
+      message: cause instanceof Error ? cause.message : String(cause),
+    };
   }
 }
