@@ -16,6 +16,10 @@
       <button class="pill" type="submit">Reconcile now</button>
     </form>
 
+    <form method="POST" action="?/health">
+      <button class="pill" type="submit">Check health</button>
+    </form>
+
     <form method="POST" action="?/toggle">
       <button class="pill" type="submit">
         {data.resource.enabled ? 'Disable' : 'Enable'}
@@ -45,6 +49,8 @@
       <h2>Reconciliation</h2>
       <dl class="detail-list">
         <div><dt>Healthy</dt><dd>{data.resource.runtime?.healthy === true ? 'Yes' : data.resource.runtime?.healthy === false ? 'No' : 'Unknown'}</dd></div>
+        <div><dt>Last health check</dt><dd>{date(data.resource.runtime?.lastHealthCheckAt)}</dd></div>
+        <div><dt>Health message</dt><dd>{data.resource.runtime?.lastHealthMessage ?? 'No health check yet'}</dd></div>
         <div><dt>Last reconciled</dt><dd>{date(data.resource.runtime?.lastReconciledAt)}</dd></div>
         <div><dt>Status</dt><dd>{data.resource.runtime?.lastStatusMessage ?? 'No runtime status yet'}</dd></div>
       </dl>
