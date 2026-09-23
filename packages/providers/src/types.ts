@@ -1,3 +1,4 @@
+import type { ProjectStageContext } from "@gatehouse/core";
 import type { Resource } from "@gatehouse/types";
 
 export interface ProviderHealth {
@@ -5,12 +6,25 @@ export interface ProviderHealth {
   message?: string;
 }
 
+export interface ProviderContext {
+  projectStages: ProjectStageContext[];
+}
+
 export interface Provider {
   name: Resource["provider"];
 
-  reconcile(resource: Resource): Promise<void>;
+  reconcile(
+    resource: Resource,
+    context: ProviderContext,
+  ): Promise<void>;
 
-  destroy?(resource: Resource): Promise<void>;
+  destroy?(
+    resource: Resource,
+    context: ProviderContext,
+  ): Promise<void>;
 
-  health?(resource: Resource): Promise<ProviderHealth>;
+  health?(
+    resource: Resource,
+    context: ProviderContext,
+  ): Promise<ProviderHealth>;
 }
