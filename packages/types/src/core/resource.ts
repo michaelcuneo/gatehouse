@@ -1,4 +1,4 @@
-import type { Timestamp } from "./common";
+import type { ResourceId, Timestamp } from "./common";
 import type { ResourceProvider } from "./provider";
 
 export const RESOURCE_KINDS = {
@@ -44,6 +44,8 @@ export interface BaseResource<TKind extends ResourceKind, TSpec> {
     tags?: string[];
 
     managed?: boolean;
+
+    dependsOn?: ResourceId[];
   };
 
   runtime?: {
