@@ -13,17 +13,17 @@
     Files produced by GateHouse for runtime consumers. Certificate contents are never displayed here.
   </p>
 
-  {#each Object.entries(data.generated) as [group, files]}
+  {#each data.groups as group}
     <div class="section-head">
       <div>
-        <span class="eyebrow">{group}</span>
-        <h2>{files.length} files</h2>
-        <p class="muted mono">{data.directories[group]}</p>
+        <span class="eyebrow">{group.name}</span>
+        <h2>{group.files.length} files</h2>
+        <p class="muted mono">{group.directory}</p>
       </div>
     </div>
 
     <section class="panel table-panel">
-      {#if files.length}
+      {#if group.files.length}
         <table class="data-table">
           <thead>
             <tr>
@@ -33,7 +33,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each files as file}
+            {#each group.files as file}
               <tr>
                 <td class="mono">{file.name}</td>
                 <td>{size(file.size)}</td>
