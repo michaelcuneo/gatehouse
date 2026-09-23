@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { data } = $props();
+  let { data, form } = $props();
 
   const date = (value?: string) => value ? new Date(value).toLocaleString() : 'Never';
 </script>
@@ -11,7 +11,21 @@
     <span class={`status status-${data.resource.status}`}>{data.resource.status}</span>
     <span class="pill">{data.resource.provider}</span>
     <span class="pill">v{data.resource.version}</span>
+
+    <form method="POST" action="?/reconcile">
+      <button class="pill" type="submit">Reconcile now</button>
+    </form>
+
+    <form method="POST" action="?/toggle">
+      <button class="pill" type="submit">
+        {data.resource.enabled ? 'Disable' : 'Enable'}
+      </button>
+    </form>
   </div>
+
+  {#if form?.error}
+    <p class="error mono">{form.error}</p>
+  {/if}
 
   <div class="detail-grid dashboard-metrics">
     <section class="panel">
