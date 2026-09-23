@@ -3,20 +3,26 @@
 
   const base = `/p/${data.project.slug}/${data.stage.name}`;
 
-  const nav = [
-    ['Overview', base, true],
-    ['Logs', `${base}/logs`, data.stage.capabilities.logs],
-    ['Errors', `${base}/errors`, data.stage.capabilities.errors],
-    ['Requests', `${base}/requests`, data.stage.capabilities.requests],
-    ['Functions', `${base}/functions`, data.stage.capabilities.functions],
-    ['Services', `${base}/services`, data.stage.capabilities.services],
-    ['Databases', `${base}/databases`, data.stage.capabilities.databases],
-    ['Queues', `${base}/queues`, data.stage.capabilities.queues],
-    ['Costs', `${base}/costs`, data.stage.capabilities.costs],
-    ['AI Usage', `${base}/ai`, data.stage.capabilities.aiUsage],
-    ['Auth', `${base}/auth`, data.stage.capabilities.auth],
-    ['Diagnostics', `${base}/diagnostics`, data.stage.capabilities.diagnostics]
-  ].filter((item) => item[2]);
+  type ProjectNavItem = {
+    label: string;
+    href: string;
+    enabled: boolean;
+  };
+
+  const nav: ProjectNavItem[] = [
+    { label: 'Overview', href: base, enabled: true },
+    { label: 'Logs', href: `${base}/logs`, enabled: data.stage.capabilities.logs },
+    { label: 'Errors', href: `${base}/errors`, enabled: data.stage.capabilities.errors },
+    { label: 'Requests', href: `${base}/requests`, enabled: data.stage.capabilities.requests },
+    { label: 'Functions', href: `${base}/functions`, enabled: data.stage.capabilities.functions },
+    { label: 'Services', href: `${base}/services`, enabled: data.stage.capabilities.services },
+    { label: 'Databases', href: `${base}/databases`, enabled: data.stage.capabilities.databases },
+    { label: 'Queues', href: `${base}/queues`, enabled: data.stage.capabilities.queues },
+    { label: 'Costs', href: `${base}/costs`, enabled: data.stage.capabilities.costs },
+    { label: 'AI Usage', href: `${base}/ai`, enabled: data.stage.capabilities.aiUsage },
+    { label: 'Auth', href: `${base}/auth`, enabled: data.stage.capabilities.auth },
+    { label: 'Diagnostics', href: `${base}/diagnostics`, enabled: data.stage.capabilities.diagnostics }
+  ].filter((item) => item.enabled);
 </script>
 
 <main class="container">
@@ -39,7 +45,7 @@
       <span class="eyebrow">Operations</span>
       <nav class="nav">
         {#each nav as item}
-          <a href={item[1]}>{item[0]}</a>
+          <a href={item.href}>{item.label}</a>
         {/each}
       </nav>
     </aside>
