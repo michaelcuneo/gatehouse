@@ -9,7 +9,8 @@
       label: 'GateHouse',
       items: [
         ['Dashboard', '/'],
-        ['Projects', '/projects']
+        ['Projects', '/projects'],
+        ['Deployments', '/deployments']
       ]
     },
     {
