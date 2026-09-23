@@ -15,7 +15,8 @@
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-lambda": "^3.0.0",
     "@aws-sdk/client-sts": "^3.0.0",
-    "@gatehouse/core": "workspace:*"
+    "@gatehouse/core": "workspace:*",
+    "@aws-sdk/client-route-53": "^3.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
