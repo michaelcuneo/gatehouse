@@ -168,6 +168,9 @@ importers:
 
   packages/providers:
     dependencies:
+      '@gatehouse/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@gatehouse/types':
         specifier: workspace:*
         version: link:../types
