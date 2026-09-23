@@ -46,7 +46,7 @@
               </td>
               <td class="muted">
                 {resource.runtime?.lastReconciledAt
-                  ? date(resource.runtime.lastReconciledAt as string)
+                  ? date(resource.runtime.lastReconciledAt)
                   : 'Never'}
               </td>
             </tr>
