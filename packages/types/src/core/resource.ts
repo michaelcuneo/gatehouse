@@ -56,6 +56,10 @@ export interface BaseResource<TKind extends ResourceKind, TSpec> {
     lastStatusMessage?: string;
 
     healthy?: boolean;
+
+    lastHealthCheckAt?: Timestamp;
+
+    lastHealthMessage?: string;
   };
 
   spec: TSpec;
