@@ -6,19 +6,19 @@
 </script>
 
 <svelte:head>
-  <title>GateHouse Console</title>
+  <title>GateHouse</title>
   <meta
     name="description"
-    content="Private cross-project engineering and infrastructure operations console."
+    content="GateHouse infrastructure management, deployment and cross-project operations."
   />
   <link rel="icon" href={favicon} />
 </svelte:head>
 
 <div class="shell">
   <header class="topbar">
-    <a class="brand" href="/">GateHouse <span>/ Console</span></a>
+    <a class="brand" href="/">GateHouse</a>
     <div class="spacer"></div>
-    <span class="eyebrow">Private operations plane</span>
+    <span class="eyebrow">Infrastructure · Deployments · Operations</span>
   </header>
 
   {@render children()}
