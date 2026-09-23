@@ -1,7 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import fs from "node:fs/promises";
+
 import {
+  nginxConfigPath,
   removeNginxConfig as removeGeneratedNginxConfig,
   writeNginxConfig,
 } from "@gatehouse/runtime";
@@ -57,4 +60,26 @@ export async function removeNginxConfig(resourceId: string): Promise<void> {
   );
 
   await runPrivilegedHelper(command, [target, `${resourceId}.conf`]);
+}
+
+
+export async function checkNginxHealth(
+  resourceId: string,
+): Promise<{ healthy: boolean; message: string }> {
+  try {
+    await fs.access(nginxConfigPath(resourceId));
+    await execFileAsync("systemctl", ["is-active", "--quiet", "nginx"], {
+      timeout: 10_000,
+    });
+
+    return {
+      healthy: true,
+      message: "NGINX is active and generated config exists",
+    };
+  } catch (cause) {
+    return {
+      healthy: false,
+      message: cause instanceof Error ? cause.message : String(cause),
+    };
+  }
 }
