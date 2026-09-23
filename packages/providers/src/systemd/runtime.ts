@@ -59,3 +59,26 @@ export async function removeManagedService(resourceId: string): Promise<void> {
     [target, filename],
   );
 }
+
+
+export async function checkSystemdService(
+  resourceId: string,
+): Promise<{ healthy: boolean; message: string }> {
+  const filename = serviceUnitFilename(resourceId);
+
+  try {
+    await execFileAsync("systemctl", ["is-active", "--quiet", filename], {
+      timeout: 10_000,
+    });
+
+    return {
+      healthy: true,
+      message: `Systemd unit is active: ${filename}`,
+    };
+  } catch (cause) {
+    return {
+      healthy: false,
+      message: cause instanceof Error ? cause.message : String(cause),
+    };
+  }
+}
