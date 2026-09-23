@@ -40,6 +40,8 @@ export function credentialsForStage(stage: ManagedStage) {
     return undefined;
   }
 
+  const access = stage.access;
+
   return async () => {
     const key = cacheKey(stage);
     const cached = cache.get(key);
@@ -54,10 +56,10 @@ export function credentialsForStage(stage: ManagedStage) {
 
     const response = await sts.send(
       new AssumeRoleCommand({
-        RoleArn: stage.access.roleArn,
+        RoleArn: access.roleArn,
         RoleSessionName: `gatehouse-${stage.id}`.slice(0, 64),
-        ExternalId: stage.access.externalId,
-        SourceIdentity: stage.access.sourceIdentity ?? "gatehouse",
+        ExternalId: access.externalId,
+        SourceIdentity: access.sourceIdentity ?? "gatehouse",
         DurationSeconds: 3600,
       }),
     );
