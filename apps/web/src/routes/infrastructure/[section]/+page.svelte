@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { data } = $props();
+  let { data, form } = $props();
   const date = (value: string) => new Date(value).toLocaleString();
 </script>
 
@@ -62,4 +62,97 @@
       </div>
     {/if}
   </section>
+
+  {#if data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Desired state</span>
+        <h2>
+          {data.section.kind === 'storage_bucket'
+            ? 'Create local storage'
+            : 'Create static deployment'}
+        </h2>
+      </div>
+    </div>
+
+    <section class="panel">
+      {#if form?.error}
+        <p class="error mono">{form.error}</p>
+      {/if}
+
+      <form method="POST" action="?/create">
+        <div class="form-grid">
+          <div class="field">
+            <label for="name">Resource name</label>
+            <input id="name" name="name" required />
+          </div>
+
+          {#if data.section.kind === 'storage_bucket'}
+            <div class="field">
+              <label for="path">Local path</label>
+              <input
+                id="path"
+                name="path"
+                placeholder="/srv/gatehouse/storage"
+                required
+              />
+            </div>
+          {:else}
+            <div class="field">
+              <label for="buildDirectory">Build directory</label>
+              <input
+                id="buildDirectory"
+                name="buildDirectory"
+                placeholder="apps/site/build"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="outputDirectory">Deployment directory</label>
+              <input
+                id="outputDirectory"
+                name="outputDirectory"
+                placeholder="/srv/sites/example"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="endpointId">Endpoint dependency</label>
+              <select id="endpointId" name="endpointId">
+                <option value="">None</option>
+                {#each data.endpoints as endpoint}
+                  <option value={endpoint.id}>{endpoint.name}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="storageId">Storage dependency</label>
+              <select id="storageId" name="storageId">
+                <option value="">None</option>
+                {#each data.storage as storage}
+                  <option value={storage.id}>{storage.name}</option>
+                {/each}
+              </select>
+            </div>
+
+            <label class="check-field">
+              <input name="deployOnChange" type="checkbox" />
+              Deploy on change
+            </label>
+          {/if}
+        </div>
+
+        <div class="actions">
+          <button class="button" type="submit">
+            {data.section.kind === 'storage_bucket'
+              ? 'Create and reconcile'
+              : 'Deploy static site'}
+          </button>
+        </div>
+      </form>
+    </section>
+  {/if}
 </main>
