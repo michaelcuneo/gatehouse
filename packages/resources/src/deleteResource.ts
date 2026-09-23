@@ -1,10 +1,5 @@
-import { db } from "@gatehouse/db";
+import { deleteResource as deleteStoredResource } from "@gatehouse/db";
 
-export async function deleteResource(id: string): Promise<void> {
-  db.prepare(
-    `
-    DELETE FROM resources
-    WHERE id = ?
-  `,
-  ).run(id);
+export function deleteResource(id: string): boolean {
+  return deleteStoredResource(id);
 }
