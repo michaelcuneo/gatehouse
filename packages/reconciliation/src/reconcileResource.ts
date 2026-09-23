@@ -1,7 +1,7 @@
-import { getResource } from "@gatehouse/resources";
 import { getProvider } from "@gatehouse/providers";
+import { getResource } from "@gatehouse/resources";
 
-export async function reconcileResource(resourceId: string) {
+export async function reconcileResource(resourceId: string): Promise<void> {
   const resource = getResource(resourceId);
 
   if (!resource) {
