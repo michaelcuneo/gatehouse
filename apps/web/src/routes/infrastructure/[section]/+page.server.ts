@@ -73,7 +73,62 @@ export const actions: Actions = {
     const now = new Date().toISOString();
     let resource: Resource;
 
-    if (params.section === 'storage') {
+    if (params.section === 'services') {
+      const runtime = text(form, 'runtime');
+      const workingDirectory = text(form, 'workingDirectory');
+      const startCommand = text(form, 'startCommand');
+      const envFile = text(form, 'envFile');
+      const portName = text(form, 'portName') || 'http';
+      const port = Number(text(form, 'port'));
+      const protocol = text(form, 'protocol') || 'http';
+
+      if (!['node', 'bun', 'docker', 'python', 'binary'].includes(runtime)) {
+        return fail(400, { error: 'A valid service runtime is required.' });
+      }
+
+      if (!workingDirectory || !startCommand) {
+        return fail(400, {
+          error: 'Working directory and start command are required.'
+        });
+      }
+
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return fail(400, { error: 'A valid service port is required.' });
+      }
+
+      if (!['http', 'https', 'tcp'].includes(protocol)) {
+        return fail(400, { error: 'A valid port protocol is required.' });
+      }
+
+      resource = {
+        id: crypto.randomUUID(),
+        kind: 'service',
+        name,
+        provider: 'systemd',
+        version: 1,
+        enabled: true,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          managed: true
+        },
+        spec: {
+          runtime,
+          workingDirectory,
+          startCommand,
+          envFile: envFile || undefined,
+          ports: [
+            {
+              name: portName,
+              port,
+              protocol
+            }
+          ],
+          autoStart: form.get('autoStart') === 'on'
+        }
+      };
+    } else if (params.section === 'storage') {
       const storagePath = text(form, 'path');
 
       if (!storagePath) {
