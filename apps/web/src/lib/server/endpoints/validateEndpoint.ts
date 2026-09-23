@@ -1,17 +1,21 @@
-export function validateEndpoint(endpoint: Endpoint) {
-	if (!endpoint.host) {
-		throw new Error('Host is required');
-	}
+export function validateEndpoint(endpoint: EndpointResource) {
+  const spec = endpoint.spec;
 
-	if (endpoint.type === 'reverse_proxy') {
-		if (!endpoint.targetPort) {
-			throw new Error('Target port required');
-		}
-	}
+  if (!spec.host) {
+    throw new Error('Host is required');
+  }
 
-	if (endpoint.type === 'static') {
-		if (!endpoint.root) {
-			throw new Error('Static root required');
-		}
-	}
+  if (spec.mode === 'reverse_proxy') {
+    if (!spec.upstream.host) {
+      throw new Error('Upstream host is required');
+    }
+
+    if (!spec.upstream.port) {
+      throw new Error('Upstream port is required');
+    }
+  }
+
+  if (spec.mode === 'static' && !spec.root) {
+    throw new Error('Static root is required');
+  }
 }
