@@ -30,13 +30,13 @@
     </div>
 
     <a class="pill" href="/">
-      Projects
+      GateHouse
     </a>
   </div>
 
-  <div class="console-layout">
+  <div class="project-layout">
     <aside class="sidebar panel">
-      <span class="eyebrow">Project</span>
+      <span class="eyebrow">Operations</span>
       <nav class="nav">
         {#each nav as item}
           <a href={item[1]}>{item[0]}</a>
@@ -84,8 +84,8 @@
       {/if}
 
       <article class="panel">
-        <span class="eyebrow">Capabilities</span>
-        <h2>Enabled surfaces</h2>
+        <span class="eyebrow">Project capabilities</span>
+        <h2>Available operations</h2>
         <div class="stage-row">
           {#each Object.entries(data.stage.capabilities) as [name, enabled]}
             {#if enabled}
