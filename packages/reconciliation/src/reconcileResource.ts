@@ -1,4 +1,7 @@
-import { updateResourceState } from "@gatehouse/db";
+import {
+  updateResourceState,
+  writeAuditLog,
+} from "@gatehouse/db";
 import { getProvider } from "@gatehouse/providers";
 import {
   getResource,
@@ -49,6 +52,15 @@ async function applyResource(resource: Resource): Promise<void> {
       },
       updatedAt: completedAt,
     });
+
+    writeAuditLog({
+      resourceId: resource.id,
+      action: "reconcile",
+      success: true,
+      message: resource.enabled
+        ? `Reconciled with ${resource.provider}`
+        : `Removed disabled resource with ${resource.provider}`,
+    });
   } catch (cause) {
     const failedAt = new Date().toISOString();
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -62,6 +74,13 @@ async function applyResource(resource: Resource): Promise<void> {
         healthy: false,
       },
       updatedAt: failedAt,
+    });
+
+    writeAuditLog({
+      resourceId: resource.id,
+      action: "reconcile",
+      success: false,
+      message,
     });
 
     throw cause;
