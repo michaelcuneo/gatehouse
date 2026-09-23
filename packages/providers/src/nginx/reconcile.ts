@@ -3,6 +3,7 @@ import type { Resource } from "@gatehouse/types";
 import { renderEndpoint } from "./render";
 import {
   applyNginxConfig,
+  checkNginxHealth,
   removeNginxConfig,
 } from "./runtime";
 import { validateEndpoint } from "./validate";
@@ -31,4 +32,11 @@ export async function destroyNginxResource(resource: Resource): Promise<void> {
   const endpoint = assertEndpoint(resource);
 
   await removeNginxConfig(endpoint.id);
+}
+
+
+export async function healthNginxResource(resource: Resource) {
+  const endpoint = assertEndpoint(resource);
+
+  return checkNginxHealth(endpoint.id);
 }
