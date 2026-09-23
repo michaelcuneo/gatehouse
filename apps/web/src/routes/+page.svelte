@@ -3,15 +3,16 @@
 </script>
 
 <main class="container">
-  <span class="eyebrow">Cross-project control plane</span>
-  <h1>Projects</h1>
+  <span class="eyebrow">Infrastructure and operations</span>
+  <h1>GateHouse</h1>
   <p class="muted">
-    Register AWS-backed systems, switch between stages and inspect their operational state from one place.
+    Manage GateHouse-owned infrastructure and register external systems so deployments,
+    runtime state, AWS resources and application diagnostics can be understood together.
   </p>
 
   <div class="section-head">
     <div>
-      <span class="eyebrow">Managed systems</span>
+      <span class="eyebrow">Projects</span>
       <h2>{data.projects.length} registered</h2>
     </div>
   </div>
@@ -40,15 +41,18 @@
     </div>
   {:else}
     <section class="panel">
-      <h2>No managed projects yet</h2>
-      <p class="muted">Register the first AWS project below.</p>
+      <h2>No registered projects yet</h2>
+      <p class="muted">
+        Register an existing AWS-backed project below. GateHouse-owned resources remain
+        managed through the same application and reconciliation runtime.
+      </p>
     </section>
   {/if}
 
   <div class="section-head">
     <div>
-      <span class="eyebrow">Registry</span>
-      <h2>Add project</h2>
+      <span class="eyebrow">Project registry</span>
+      <h2>Register existing system</h2>
     </div>
   </div>
 
