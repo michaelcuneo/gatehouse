@@ -57,7 +57,7 @@ export function credentialsForStage(stage: ManagedStage) {
         RoleArn: stage.access.roleArn,
         RoleSessionName: `gatehouse-${stage.id}`.slice(0, 64),
         ExternalId: stage.access.externalId,
-        SourceIdentity: stage.access.sourceIdentity ?? "gatehouse-console",
+        SourceIdentity: stage.access.sourceIdentity ?? "gatehouse",
         DurationSeconds: 3600,
       }),
     );
