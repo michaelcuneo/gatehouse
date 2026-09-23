@@ -18,7 +18,11 @@ export async function reconcileSystemdResource(
 
   const unit = renderServiceUnit(resource);
 
-  await applyServiceUnit(resource.id, unit);
+  await applyServiceUnit(
+    resource.id,
+    unit,
+    resource.spec.autoStart !== false,
+  );
 }
 
 export async function destroySystemdResource(
