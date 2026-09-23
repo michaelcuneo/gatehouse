@@ -1,23 +1,12 @@
-import { db } from "@gatehouse/db";
-import { validateResource } from "./validateResource";
+import { saveResource } from "@gatehouse/db";
 import type { Resource } from "@gatehouse/types";
 
-export async function updateResource(resource: Resource): Promise<Resource> {
+import { validateResource } from "./validateResource";
+
+export function updateResource(resource: Resource): Resource {
   validateResource(resource);
 
-  db.prepare(
-    `
-    UPDATE resources
-    SET
-      spec = ?,
-      status = ?
-    WHERE id = ?
-  `,
-  ).run(
-    JSON.stringify(resource.spec),
-    JSON.stringify(resource.status ?? {}),
-    resource.id,
-  );
+  saveResource<Resource["spec"]>(resource);
 
   return resource;
 }
