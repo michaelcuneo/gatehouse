@@ -88,6 +88,18 @@
         </div>
 
         <div class="field">
+          <label for="stageId">Project / stage</label>
+          <select id="stageId" name="stageId">
+            <option value="">Unassigned infrastructure</option>
+            {#each data.projects as project}
+              {#each project.stages as stage}
+                <option value={stage.id}>{project.name} / {stage.name}</option>
+              {/each}
+            {/each}
+          </select>
+        </div>
+
+        <div class="field">
           <label for="mode">Mode</label>
           <select id="mode" name="mode" bind:value={mode}>
             <option value="reverse_proxy">Reverse proxy</option>
