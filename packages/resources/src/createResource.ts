@@ -1,28 +1,12 @@
-import { db } from "@gatehouse/db";
-import { validateResource } from "./validateResource";
+import { saveResource } from "@gatehouse/db";
 import type { Resource } from "@gatehouse/types";
 
-export async function createResource(resource: Resource): Promise<Resource> {
+import { validateResource } from "./validateResource";
+
+export function createResource(resource: Resource): Resource {
   validateResource(resource);
 
-  db.prepare(
-    `
-    INSERT INTO resources (
-      id,
-      kind,
-      name,
-      spec,
-      status
-    )
-    VALUES (?, ?, ?, ?, ?)
-  `,
-  ).run(
-    resource.id,
-    resource.kind,
-    resource.name,
-    JSON.stringify(resource.spec),
-    JSON.stringify(resource.status ?? {}),
-  );
+  saveResource<Resource["spec"]>(resource);
 
   return resource;
 }
