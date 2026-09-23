@@ -1,7 +1,7 @@
 <script lang="ts">
   let { data } = $props();
 
-  const base = `/p/${data.project.slug}/${data.stage.name}`;
+  const base = $derived(`/p/${data.project.slug}/${data.stage.name}`);
   const date = (value: number) => new Date(value).toLocaleString();
 </script>
 
