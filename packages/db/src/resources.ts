@@ -27,6 +27,8 @@ export interface StoredResourceRuntime {
   lastError?: string;
   lastStatusMessage?: string;
   healthy?: boolean;
+  lastHealthCheckAt?: string;
+  lastHealthMessage?: string;
 }
 
 export interface StoredResource<TSpec = unknown> {
