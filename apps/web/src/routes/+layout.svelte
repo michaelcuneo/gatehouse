@@ -4,40 +4,50 @@
 
   let { children } = $props();
 
-  const navigation = [
+  type NavItem = {
+    label: string;
+    href: string;
+  };
+
+  type NavSection = {
+    label: string;
+    items: NavItem[];
+  };
+
+  const navigation: NavSection[] = [
     {
       label: 'GateHouse',
       items: [
-        ['Dashboard', '/'],
-        ['Projects', '/projects'],
-        ['Deployments', '/deployments']
+        { label: 'Dashboard', href: '/' },
+        { label: 'Projects', href: '/projects' },
+        { label: 'Deployments', href: '/deployments' }
       ]
     },
     {
       label: 'Infrastructure',
       items: [
-        ['Resources', '/infrastructure/resources'],
-        ['Endpoints', '/infrastructure/endpoints'],
-        ['Services', '/infrastructure/services'],
-        ['Static Sites', '/infrastructure/static-sites'],
-        ['DNS', '/infrastructure/dns'],
-        ['Certificates', '/infrastructure/certificates'],
-        ['Storage', '/infrastructure/storage']
+        { label: 'Resources', href: '/infrastructure/resources' },
+        { label: 'Endpoints', href: '/infrastructure/endpoints' },
+        { label: 'Services', href: '/infrastructure/services' },
+        { label: 'Static Sites', href: '/infrastructure/static-sites' },
+        { label: 'DNS', href: '/infrastructure/dns' },
+        { label: 'Certificates', href: '/infrastructure/certificates' },
+        { label: 'Storage', href: '/infrastructure/storage' }
       ]
     },
     {
       label: 'Runtime',
       items: [
-        ['Reconciliation', '/runtime/reconciliation'],
-        ['Providers', '/runtime/providers'],
-        ['Generated Config', '/runtime/generated']
+        { label: 'Reconciliation', href: '/runtime/reconciliation' },
+        { label: 'Providers', href: '/runtime/providers' },
+        { label: 'Generated Config', href: '/runtime/generated' }
       ]
     },
     {
       label: 'Operations',
       items: [
-        ['Logs', '/operations/logs'],
-        ['Errors', '/operations/errors']
+        { label: 'Logs', href: '/operations/logs' },
+        { label: 'Errors', href: '/operations/errors' }
       ]
     }
   ];
@@ -61,7 +71,7 @@
         <div class="nav-section">
           <span class="eyebrow">{section.label}</span>
           {#each section.items as item}
-            <a href={item[1]}>{item[0]}</a>
+            <a href={item.href}>{item.label}</a>
           {/each}
         </div>
       {/each}
