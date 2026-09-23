@@ -268,3 +268,18 @@ export function getManagedStage(
 
   return stage ? { project, stage } : null;
 }
+
+
+export function getManagedStageById(
+  stageId: string,
+): ProjectStageContext | null {
+  for (const project of listManagedProjects()) {
+    const stage = project.stages.find((candidate) => candidate.id === stageId);
+
+    if (stage) {
+      return { project, stage };
+    }
+  }
+
+  return null;
+}
