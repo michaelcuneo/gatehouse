@@ -1,0 +1,5 @@
+
+
+> @gatehouse/aws@ check /home/michael/gatehouse/packages/aws
+> tsc --noEmit
+

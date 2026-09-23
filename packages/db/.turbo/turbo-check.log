@@ -1,0 +1,5 @@
+
+
+> @gatehouse/db@ check /home/michael/gatehouse/packages/db
+> tsc --noEmit
+

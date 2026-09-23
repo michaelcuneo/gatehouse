@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 
-import { GENERATED_NGINX_DIR } from "../paths";
+import { GENERATED_NGINX_DIR } from "../../paths";
 
 export async function writeNginxConfig(
   filename: string,

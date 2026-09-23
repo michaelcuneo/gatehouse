@@ -1,0 +1,37 @@
+
+
+> @gatehouse/reconciliation@ build /home/michael/gatehouse/packages/reconciliation
+> tsc --noEmit
+
+[96msrc/reconcileAllResources.ts[0m:[93m8[0m:[93m26[0m - [91merror[0m[90m TS2488: [0mType 'Promise<Resource[]>' must have a '[Symbol.iterator]()' method that returns an iterator.
+
+[7m8[0m   for (const resource of resources) {
+[7m [0m [91m                         ~~~~~~~~~[0m
+
+  [96msrc/reconcileAllResources.ts[0m:[93m8[0m:[93m26[0m
+    [7m8[0m   for (const resource of resources) {
+    [7m [0m [96m                         ~~~~~~~~~[0m
+    Did you forget to use 'await'?
+
+[96msrc/reconcileResource.ts[0m:[93m11[0m:[93m41[0m - [91merror[0m[90m TS2339: [0mProperty 'provider' does not exist on type 'Promise<Resource | null>'.
+
+[7m11[0m   const provider = getProvider(resource.provider);
+[7m  [0m [91m                                        ~~~~~~~~[0m
+
+[96msrc/reconcileResource.ts[0m:[93m14[0m:[93m42[0m - [91merror[0m[90m TS2339: [0mProperty 'provider' does not exist on type 'Promise<Resource | null>'.
+
+[7m14[0m     throw new Error(`Provider ${resource.provider} not found`);
+[7m  [0m [91m                                         ~~~~~~~~[0m
+
+[96msrc/reconcileResource.ts[0m:[93m17[0m:[93m28[0m - [91merror[0m[90m TS2345: [0mArgument of type 'Promise<Resource | null>' is not assignable to parameter of type 'EndpointResource'.
+  Type 'Promise<Resource | null>' is missing the following properties from type 'BaseResource<"endpoint", EndpointSpec>': id, kind, name, provider, and 6 more.
+
+[7m17[0m   await provider.reconcile(resource);
+[7m  [0m [91m                           ~~~~~~~~[0m
+
+
+Found 4 errors in 2 files.
+
+Errors  Files
+     1  src/reconcileAllResources.ts[90m:8[0m
+     3  src/reconcileResource.ts[90m:11[0m

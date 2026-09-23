@@ -1,0 +1,5 @@
+
+
+> @gatehouse/providers@ build /home/michael/gatehouse/packages/providers
+> tsc --noEmit
+
