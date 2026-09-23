@@ -67,5 +67,20 @@ export function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_managed_project_resources_resource
       ON managed_project_resources(resource_id);
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      resource_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      success INTEGER NOT NULL,
+      message TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_resource
+      ON audit_logs(resource_id, timestamp DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp
+      ON audit_logs(timestamp DESC);
   `);
 }
