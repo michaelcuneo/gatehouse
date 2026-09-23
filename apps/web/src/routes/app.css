@@ -241,3 +241,156 @@ code, .mono {
   .project-layout { grid-template-columns: 1fr; }
   .sidebar { position: static; }
 }
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 22px 16px;
+  border-right: 1px solid #202630;
+  background: #0b0e13;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.app-main {
+  min-width: 0;
+}
+
+.app-nav {
+  display: grid;
+  gap: 24px;
+}
+
+.nav-section {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-section > .eyebrow {
+  margin: 0 8px 5px;
+}
+
+.nav-section a {
+  padding: 8px 9px;
+  border-radius: 7px;
+  color: #9aa7b8;
+  font-size: 0.9rem;
+}
+
+.nav-section a:hover {
+  color: white;
+  background: #141a22;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  color: #7e8da3;
+  font-size: 0.78rem;
+}
+
+.dashboard-metrics {
+  margin-top: 28px;
+}
+
+.resource-kind-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid #202630;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-table th {
+  color: #7e8da3;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: #0d1117;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.status {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  text-transform: capitalize;
+  border: 1px solid #303846;
+}
+
+.status-ready { color: #8cddb0; border-color: #28563b; background: #102319; }
+.status-error { color: #f0aaaa; border-color: #6d3434; background: #241313; }
+.status-reconciling,
+.status-pending { color: #e5c77d; border-color: #655525; background: #211c0d; }
+.status-disabled { color: #9aa7b8; }
+
+.empty-state {
+  padding: 42px;
+  text-align: center;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 920px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #202630;
+  }
+
+  .app-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-nav {
+    grid-template-columns: 1fr;
+  }
+}
