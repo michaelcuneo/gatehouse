@@ -19,7 +19,6 @@ export interface StoredResourceMetadata {
   description?: string;
   tags?: string[];
   managed?: boolean;
-  [key: string]: unknown;
 }
 
 export interface StoredResourceRuntime {
@@ -27,7 +26,6 @@ export interface StoredResourceRuntime {
   lastError?: string;
   lastStatusMessage?: string;
   healthy?: boolean;
-  [key: string]: unknown;
 }
 
 export interface StoredResource<TSpec = unknown> {
