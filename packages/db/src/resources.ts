@@ -19,6 +19,7 @@ export interface StoredResourceMetadata {
   description?: string;
   tags?: string[];
   managed?: boolean;
+  dependsOn?: string[];
 }
 
 export interface StoredResourceRuntime {
