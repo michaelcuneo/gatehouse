@@ -84,6 +84,27 @@
       {/if}
 
       <article class="panel">
+        <span class="eyebrow">GateHouse managed</span>
+        <h2>Infrastructure</h2>
+        {#if data.resources.length}
+          <div class="resource-list">
+            {#each data.resources as resource}
+              <a class="resource-row" href={`/infrastructure/resources/${resource.id}`}>
+                <div>
+                  <strong>{resource.name}</strong>
+                  <span class="muted mono">{resource.kind} · {resource.provider}</span>
+                </div>
+                <span class={`status status-${resource.status}`}>{resource.status}</span>
+              </a>
+            {/each}
+          </div>
+        {:else}
+          <p class="muted">No GateHouse-owned resources are attached to this stage yet.</p>
+          <a class="pill" href="/infrastructure/endpoints">Create or attach infrastructure</a>
+        {/if}
+      </article>
+
+      <article class="panel">
         <span class="eyebrow">Project capabilities</span>
         <h2>Available operations</h2>
         <div class="stage-row">

@@ -13,6 +13,7 @@
   "devDependencies": {
     "turbo": "latest",
     "typescript": "latest",
-    "prettier": "latest"
+    "prettier": "latest",
+    "@types/node": "^22.0.0"
   }
 }
