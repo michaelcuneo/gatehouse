@@ -5,6 +5,7 @@ import type {
   ProjectCapabilities,
   ProjectManifestLocation,
   AwsResourceSelector,
+  ProjectStageContext,
 } from "@gatehouse/core";
 
 import { getDatabase } from "./client";
