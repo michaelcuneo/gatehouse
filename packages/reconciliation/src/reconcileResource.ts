@@ -10,9 +10,11 @@ import {
 import type { Resource } from "@gatehouse/types";
 
 import { planReconciliation } from "./planReconciliation";
+import { providerContextForResource } from "./providerContext";
 
 async function applyResource(resource: Resource): Promise<void> {
   const provider = getProvider(resource.provider);
+  const context = providerContextForResource(resource.id);
 
   if (!provider) {
     throw new Error(`Provider "${resource.provider}" is not implemented`);
@@ -33,9 +35,9 @@ async function applyResource(resource: Resource): Promise<void> {
 
   try {
     if (resource.enabled) {
-      await provider.reconcile(resource);
+      await provider.reconcile(resource, context);
     } else if (provider.destroy) {
-      await provider.destroy(resource);
+      await provider.destroy(resource, context);
     }
 
     const completedAt = new Date().toISOString();
