@@ -1,19 +1,34 @@
 import type { Resource } from "@gatehouse/types";
 
 import { renderEndpoint } from "./render";
-import { applyNginxConfig } from "./runtime";
+import {
+  applyNginxConfig,
+  removeNginxConfig,
+} from "./runtime";
 import { validateEndpoint } from "./validate";
 
-export async function reconcileNginxResource(resource: Resource): Promise<void> {
+function assertEndpoint(resource: Resource) {
   if (resource.kind !== "endpoint") {
     throw new Error(
       `NGINX provider cannot reconcile resource kind "${resource.kind}"`,
     );
   }
 
-  validateEndpoint(resource);
+  return resource;
+}
 
-  const config = renderEndpoint(resource);
+export async function reconcileNginxResource(resource: Resource): Promise<void> {
+  const endpoint = assertEndpoint(resource);
 
-  await applyNginxConfig(config);
+  validateEndpoint(endpoint);
+
+  const config = renderEndpoint(endpoint);
+
+  await applyNginxConfig(endpoint.id, config);
+}
+
+export async function destroyNginxResource(resource: Resource): Promise<void> {
+  const endpoint = assertEndpoint(resource);
+
+  await removeNginxConfig(endpoint.id);
 }
