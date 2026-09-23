@@ -2,6 +2,7 @@ import type { Provider } from "../types";
 
 import {
   destroySystemdResource,
+  healthSystemdResource,
   reconcileSystemdResource,
 } from "./reconcile";
 
@@ -9,6 +10,7 @@ export const systemdProvider: Provider = {
   name: "systemd",
   reconcile: reconcileSystemdResource,
   destroy: destroySystemdResource,
+  health: healthSystemdResource,
 };
 
 export * from "./render";
