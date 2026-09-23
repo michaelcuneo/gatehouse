@@ -1,6 +1,11 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
+import {
+  attachResourceToStage,
+  listManagedProjects
+} from '@gatehouse/db';
+
 import { createEndpoint } from '$lib/server/endpoints/createEndpoint';
 import { listEndpoints } from '$lib/server/endpoints/listEndpoints';
 
@@ -10,7 +15,8 @@ function text(form: FormData, key: string) {
 
 export const load: PageServerLoad = async () => {
   return {
-    endpoints: await listEndpoints()
+    endpoints: await listEndpoints(),
+    projects: listManagedProjects()
   };
 };
 
@@ -24,17 +30,35 @@ export const actions: Actions = {
     const upstreamHost = text(form, 'upstreamHost') || '127.0.0.1';
     const upstreamPort = Number(text(form, 'upstreamPort'));
     const root = text(form, 'root');
+    const stageId = text(form, 'stageId');
 
     if (!name || !host) {
       return fail(400, { error: 'Name and hostname are required.' });
     }
 
-    if (mode === 'reverse_proxy' && (!Number.isInteger(upstreamPort) || upstreamPort < 1 || upstreamPort > 65535)) {
-      return fail(400, { error: 'A valid upstream port is required for reverse proxy endpoints.' });
+    if (
+      mode === 'reverse_proxy' &&
+      (!Number.isInteger(upstreamPort) || upstreamPort < 1 || upstreamPort > 65535)
+    ) {
+      return fail(400, {
+        error: 'A valid upstream port is required for reverse proxy endpoints.'
+      });
     }
 
     if (mode === 'static' && !root) {
-      return fail(400, { error: 'A filesystem root is required for static endpoints.' });
+      return fail(400, {
+        error: 'A filesystem root is required for static endpoints.'
+      });
+    }
+
+    if (stageId) {
+      const stageExists = listManagedProjects().some((project) =>
+        project.stages.some((stage) => stage.id === stageId)
+      );
+
+      if (!stageExists) {
+        return fail(400, { error: 'Selected project stage does not exist.' });
+      }
     }
 
     const now = new Date().toISOString();
@@ -73,16 +97,27 @@ export const actions: Actions = {
             }
     };
 
+    let reconciliationError: unknown;
+
     try {
       await createEndpoint(resource);
-      return { success: true };
     } catch (cause) {
+      reconciliationError = cause;
+    }
+
+    if (stageId) {
+      attachResourceToStage(stageId, resource.id);
+    }
+
+    if (reconciliationError) {
       return fail(500, {
         error:
-          cause instanceof Error
-            ? cause.message
+          reconciliationError instanceof Error
+            ? reconciliationError.message
             : 'Endpoint was saved but reconciliation failed.'
       });
     }
+
+    return { success: true };
   }
 };
