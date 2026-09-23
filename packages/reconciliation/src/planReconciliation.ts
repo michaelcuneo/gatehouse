@@ -45,22 +45,24 @@ export function planReconciliation(
 
     temporary.add(resourceId);
 
-    for (const dependencyId of dependencyIds(resource)) {
-      const dependency = byId.get(dependencyId);
+    if (resource.enabled) {
+      for (const dependencyId of dependencyIds(resource)) {
+        const dependency = byId.get(dependencyId);
 
-      if (!dependency) {
-        throw new Error(
-          `Resource "${resource.name}" depends on missing resource "${dependencyId}"`,
-        );
+        if (!dependency) {
+          throw new Error(
+            `Resource "${resource.name}" depends on missing resource "${dependencyId}"`,
+          );
+        }
+
+        if (!dependency.enabled) {
+          throw new Error(
+            `Resource "${resource.name}" depends on disabled resource "${dependency.name}"`,
+          );
+        }
+
+        visit(dependencyId, [...lineage, resourceId]);
       }
-
-      if (!dependency.enabled) {
-        throw new Error(
-          `Resource "${resource.name}" depends on disabled resource "${dependency.name}"`,
-        );
-      }
-
-      visit(dependencyId, [...lineage, resourceId]);
     }
 
     temporary.delete(resourceId);
