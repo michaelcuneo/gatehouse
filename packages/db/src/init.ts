@@ -51,5 +51,21 @@ export function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_managed_project_stages_project
       ON managed_project_stages(project_id);
+
+    CREATE TABLE IF NOT EXISTS managed_project_resources (
+      stage_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(stage_id, resource_id),
+      FOREIGN KEY(stage_id)
+        REFERENCES managed_project_stages(id)
+        ON DELETE CASCADE,
+      FOREIGN KEY(resource_id)
+        REFERENCES resources(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_managed_project_resources_resource
+      ON managed_project_resources(resource_id);
   `);
 }
