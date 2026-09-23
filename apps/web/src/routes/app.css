@@ -193,7 +193,7 @@ h2, h3 { letter-spacing: -0.025em; }
   background: #241313;
 }
 
-.console-layout {
+.project-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 24px;
@@ -238,6 +238,6 @@ code, .mono {
 @media (max-width: 760px) {
   .container { width: min(100% - 24px, 1480px); padding-top: 22px; }
   .form-grid { grid-template-columns: 1fr; }
-  .console-layout { grid-template-columns: 1fr; }
+  .project-layout { grid-template-columns: 1fr; }
   .sidebar { position: static; }
 }
