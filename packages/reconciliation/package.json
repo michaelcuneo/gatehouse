@@ -11,5 +11,11 @@
   },
   "devDependencies": {
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@gatehouse/db": "workspace:*",
+    "@gatehouse/providers": "workspace:*",
+    "@gatehouse/resources": "workspace:*",
+    "@gatehouse/types": "workspace:*"
   }
 }
