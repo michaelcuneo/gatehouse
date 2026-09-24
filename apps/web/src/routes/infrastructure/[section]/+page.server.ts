@@ -10,6 +10,7 @@ import {
   type StoredResourceKind
 } from '@gatehouse/db';
 import { reconcileResource } from '@gatehouse/reconciliation';
+import type { StaticSiteSpec } from '@gatehouse/types';
 import {
   createResource,
   getResource
@@ -99,7 +100,12 @@ export const load: PageServerLoad = async ({ params }) => {
     endpoints: listResources('endpoint'),
     storage: listResources('storage_bucket'),
     certificates: listResources('certificate'),
-    staticSites: listResources('static_site'),
+    staticSites: listResources<StaticSiteSpec>('static_site').map((site) => ({
+      id: site.id,
+      name: site.name,
+      provider: site.provider,
+      cloudFrontEnabled: site.spec.cloudFront?.enabled === true
+    })),
     projectStages: listManagedProjects().flatMap((project) =>
       project.stages
         .filter((stage) => stage.enabled)
