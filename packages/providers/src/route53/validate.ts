@@ -26,12 +26,14 @@ export function validateRoute53Resource(
   }
 
   if (resource.spec.mode === "cloudfront_alias") {
-    if (!resource.spec.staticSiteId) {
+    const staticSiteId = resource.spec.staticSiteId;
+
+    if (!staticSiteId) {
       throw new Error("CloudFront alias requires a static-site dependency");
     }
 
     const dependency = context.dependencies.find(
-      (candidate) => candidate.id === resource.spec.staticSiteId,
+      (candidate) => candidate.id === staticSiteId,
     );
 
     if (!dependency || dependency.kind !== "static_site") {
@@ -42,7 +44,7 @@ export function validateRoute53Resource(
 
     const targetStage = context.projectStages[0]?.stage;
     const dependencyStages =
-      context.dependencyStages[resource.spec.staticSiteId] ?? [];
+      context.dependencyStages[staticSiteId] ?? [];
 
     if (
       !targetStage ||
