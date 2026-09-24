@@ -35,12 +35,24 @@ export function providerContextForResource(
     .map((stageId) => getManagedStageById(stageId))
     .filter((context) => context !== null);
 
-  const dependencies = dependencyIds(resource)
+  const dependencyIdList = dependencyIds(resource);
+
+  const dependencies = dependencyIdList
     .map((dependencyId) => getResource(dependencyId))
     .filter((dependency) => dependency !== null);
+
+  const dependencyStages = Object.fromEntries(
+    dependencyIdList.map((dependencyId) => [
+      dependencyId,
+      listStageIdsForResource(dependencyId)
+        .map((stageId) => getManagedStageById(stageId))
+        .filter((context) => context !== null),
+    ]),
+  );
 
   return {
     projectStages,
     dependencies,
+    dependencyStages,
   };
 }
