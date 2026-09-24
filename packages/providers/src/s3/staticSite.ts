@@ -5,6 +5,7 @@ import {
   disableGateHouseDistribution,
   ensureGateHouseDistribution,
   findGateHouseDistribution,
+  getAcmCertificateState,
   grantCloudFrontReadAccess,
   invalidateCloudFrontDistribution,
   removeS3Deployment,
@@ -16,6 +17,7 @@ import {
 } from "@gatehouse/aws";
 import { ROOT_DIR } from "@gatehouse/runtime";
 import type {
+  CertificateResource,
   Resource,
   StaticSiteResource,
   StorageBucketResource,
@@ -158,12 +160,100 @@ function bucketSpec(storage: StorageBucketResource): S3BucketSpec {
   };
 }
 
-function cloudFrontSpec(
+function certificateDependency(
+  resource: StaticSiteResource,
+  context: ProviderContext,
+): CertificateResource | null {
+  const certificateId = resource.spec.cloudFront?.certificateId;
+
+  if (!certificateId) {
+    return null;
+  }
+
+  const dependency = context.dependencies.find(
+    (candidate) =>
+      candidate.id === certificateId &&
+      candidate.kind === "certificate",
+  );
+
+  if (!dependency || dependency.kind !== "certificate") {
+    throw new Error(
+      `Static site "${resource.name}" requires its configured certificate dependency`,
+    );
+  }
+
+  if (dependency.spec.provider !== "aws_acm") {
+    throw new Error(
+      `Static site "${resource.name}" requires an AWS ACM certificate`,
+    );
+  }
+
+  return dependency;
+}
+
+async function cloudFrontSpec(
   resource: StaticSiteResource,
   storage: StorageBucketResource,
-): CloudFrontStaticSiteSpec {
+  context: ProviderContext,
+): Promise<CloudFrontStaticSiteSpec> {
   if (storage.spec.provider !== "s3") {
     throw new Error("Expected S3 storage dependency");
+  }
+
+  const aliases = resource.spec.cloudFront?.aliases ?? [];
+  const certificate = certificateDependency(resource, context);
+  let certificateArn: string | undefined;
+
+  if (aliases.length) {
+    if (!certificate) {
+      throw new Error(
+        `Static site "${resource.name}" requires an ACM certificate for custom CloudFront aliases`,
+      );
+    }
+
+    const region = certificate.spec.region ?? "us-east-1";
+
+    if (region !== "us-east-1") {
+      throw new Error(
+        `CloudFront certificate "${certificate.name}" must be in us-east-1`,
+      );
+    }
+
+    const targetStage = stage(context);
+    const state = await getAcmCertificateState(
+      targetStage,
+      {
+        resourceId: certificate.id,
+        domains: certificate.spec.domains,
+        wildcard: certificate.spec.wildcard,
+        region,
+        certificateArn: certificate.spec.certificateArn,
+        validation: certificate.spec.validation ?? "dns",
+      },
+    );
+
+    if (!state) {
+      throw new Error(
+        `ACM certificate "${certificate.name}" does not exist`,
+      );
+    }
+
+    if (state.status !== "ISSUED") {
+      throw new Error(
+        `ACM certificate "${certificate.name}" is ${state.status ?? "not issued"}`,
+      );
+    }
+
+    certificateArn = state.arn;
+  }
+
+  if (
+    resource.spec.cloudFront?.distributionId &&
+    (aliases.length || certificateArn)
+  ) {
+    throw new Error(
+      "GateHouse does not modify aliases or certificates on adopted CloudFront distributions",
+    );
   }
 
   return {
@@ -174,6 +264,8 @@ function cloudFrontSpec(
     distributionId: resource.spec.cloudFront?.distributionId,
     defaultRootObject:
       resource.spec.cloudFront?.defaultRootObject ?? "index.html",
+    aliases,
+    certificateArn,
   };
 }
 
@@ -260,7 +352,7 @@ export async function reconcileS3StaticSite(
   if (resource.spec.cloudFront?.enabled) {
     const distribution = await ensureGateHouseDistribution(
       targetStage,
-      cloudFrontSpec(resource, storage),
+      await cloudFrontSpec(resource, storage, context),
     );
 
     await grantCloudFrontReadAccess(
@@ -282,7 +374,7 @@ export async function reconcileS3StaticSite(
   if (resource.spec.cloudFront?.enabled) {
     const distribution = await findGateHouseDistribution(
       targetStage,
-      cloudFrontSpec(resource, storage),
+      await cloudFrontSpec(resource, storage, context),
     );
 
     if (!distribution) {
@@ -307,7 +399,7 @@ export async function destroyS3StaticSite(
   if (resource.spec.cloudFront?.enabled) {
     await disableGateHouseDistribution(
       targetStage,
-      cloudFrontSpec(resource, storage),
+      await cloudFrontSpec(resource, storage, context),
     );
   }
 
@@ -346,7 +438,7 @@ export async function healthS3StaticSite(
 
   const distribution = await findGateHouseDistribution(
     targetStage,
-    cloudFrontSpec(resource, storage),
+    await cloudFrontSpec(resource, storage, context),
   );
 
   if (!distribution) {
