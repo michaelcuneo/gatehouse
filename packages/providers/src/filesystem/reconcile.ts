@@ -1,6 +1,10 @@
 import fs from "node:fs/promises";
 
 import type { Resource } from "@gatehouse/types";
+import type {
+  ProviderContext,
+  ProviderReconcileResult,
+} from "../types";
 
 import {
   deployDirectory,
@@ -13,9 +17,28 @@ import {
   validateFilesystemResource,
 } from "./validate";
 
+async function directoryExists(directory: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(directory);
+    return stat.isDirectory();
+  } catch (cause) {
+    const code =
+      cause && typeof cause === "object" && "code" in cause
+        ? String(cause.code)
+        : "";
+
+    if (code === "ENOENT") {
+      return false;
+    }
+
+    throw cause;
+  }
+}
+
 export async function reconcileFilesystemResource(
   resource: Resource,
-): Promise<void> {
+  context: ProviderContext,
+): Promise<ProviderReconcileResult | void> {
   validateFilesystemResource(resource);
 
   if (resource.kind === "storage_bucket") {
@@ -32,11 +55,29 @@ export async function reconcileFilesystemResource(
       throw new Error("Filesystem static site output directory is required");
     }
 
+    const destination = filesystemPath(resource.spec.outputDirectory);
+
+    if (
+      context.deployment?.skipArtifactTransfer &&
+      await directoryExists(destination)
+    ) {
+      return {
+        artifactTransferred: false,
+        message: "Build artifact unchanged; existing filesystem deployment retained",
+      };
+    }
+
     await deployDirectory(
       filesystemPath(resource.spec.buildDirectory),
-      filesystemPath(resource.spec.outputDirectory),
+      destination,
     );
-    return;
+
+    return {
+      artifactTransferred: true,
+      message: context.deployment?.skipArtifactTransfer
+        ? "Filesystem deployment was missing and has been restored"
+        : "Static-site build copied to filesystem target",
+    };
   }
 
   throw new Error(
@@ -71,7 +112,6 @@ export async function destroyFilesystemResource(
     return;
   }
 }
-
 
 export async function healthFilesystemResource(resource: Resource) {
   validateFilesystemResource(resource);
