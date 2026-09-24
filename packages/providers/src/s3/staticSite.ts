@@ -2,9 +2,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  disableGateHouseDistribution,
+  ensureGateHouseDistribution,
+  findGateHouseDistribution,
+  grantCloudFrontReadAccess,
+  invalidateCloudFrontDistribution,
   removeS3Deployment,
   s3DeploymentManifestExists,
   syncS3Deployment,
+  type CloudFrontStaticSiteSpec,
   type S3BucketSpec,
   type S3SyncObject,
 } from "@gatehouse/aws";
@@ -152,6 +158,25 @@ function bucketSpec(storage: StorageBucketResource): S3BucketSpec {
   };
 }
 
+function cloudFrontSpec(
+  resource: StaticSiteResource,
+  storage: StorageBucketResource,
+): CloudFrontStaticSiteSpec {
+  if (storage.spec.provider !== "s3") {
+    throw new Error("Expected S3 storage dependency");
+  }
+
+  return {
+    resourceId: resource.id,
+    bucket: storage.spec.bucket,
+    bucketRegion: storage.spec.region,
+    prefix: resource.spec.prefix,
+    distributionId: resource.spec.cloudFront?.distributionId,
+    defaultRootObject:
+      resource.spec.cloudFront?.defaultRootObject ?? "index.html",
+  };
+}
+
 function stage(context: ProviderContext) {
   const resolved = context.projectStages[0]?.stage;
 
@@ -228,14 +253,48 @@ export async function reconcileS3StaticSite(
   context: ProviderContext,
 ): Promise<void> {
   const storage = storageDependency(resource, context);
+  const targetStage = stage(context);
+  const targetBucket = bucketSpec(storage);
   const objects = await deploymentObjects(resource);
 
+  if (resource.spec.cloudFront?.enabled) {
+    const distribution = await ensureGateHouseDistribution(
+      targetStage,
+      cloudFrontSpec(resource, storage),
+    );
+
+    await grantCloudFrontReadAccess(
+      targetStage,
+      targetBucket,
+      resource.id,
+      distribution.id,
+      resource.spec.prefix,
+    );
+  }
+
   await syncS3Deployment(
-    stage(context),
-    bucketSpec(storage),
+    targetStage,
+    targetBucket,
     resource.id,
     objects,
   );
+
+  if (resource.spec.cloudFront?.enabled) {
+    const distribution = await findGateHouseDistribution(
+      targetStage,
+      cloudFrontSpec(resource, storage),
+    );
+
+    if (!distribution) {
+      throw new Error("CloudFront distribution could not be resolved after deployment");
+    }
+
+    await invalidateCloudFrontDistribution(
+      targetStage,
+      distribution.id,
+      resource.id,
+    );
+  }
 }
 
 export async function destroyS3StaticSite(
@@ -243,9 +302,17 @@ export async function destroyS3StaticSite(
   context: ProviderContext,
 ): Promise<void> {
   const storage = storageDependency(resource, context);
+  const targetStage = stage(context);
+
+  if (resource.spec.cloudFront?.enabled) {
+    await disableGateHouseDistribution(
+      targetStage,
+      cloudFrontSpec(resource, storage),
+    );
+  }
 
   await removeS3Deployment(
-    stage(context),
+    targetStage,
     bucketSpec(storage),
     resource.id,
   );
@@ -256,16 +323,51 @@ export async function healthS3StaticSite(
   context: ProviderContext,
 ) {
   const storage = storageDependency(resource, context);
+  const targetStage = stage(context);
   const exists = await s3DeploymentManifestExists(
-    stage(context),
+    targetStage,
     bucketSpec(storage),
     resource.id,
   );
 
+  if (!exists) {
+    return {
+      healthy: false,
+      message: "S3 static-site deployment manifest is missing",
+    };
+  }
+
+  if (!resource.spec.cloudFront?.enabled) {
+    return {
+      healthy: true,
+      message: "S3 static-site deployment manifest exists",
+    };
+  }
+
+  const distribution = await findGateHouseDistribution(
+    targetStage,
+    cloudFrontSpec(resource, storage),
+  );
+
+  if (!distribution) {
+    return {
+      healthy: false,
+      message: "CloudFront distribution does not exist",
+    };
+  }
+
+  if (!distribution.enabled) {
+    return {
+      healthy: false,
+      message: "CloudFront distribution is disabled",
+    };
+  }
+
   return {
-    healthy: exists,
-    message: exists
-      ? "S3 static-site deployment manifest exists"
-      : "S3 static-site deployment manifest is missing",
+    healthy: distribution.status === "Deployed",
+    message:
+      distribution.status === "Deployed"
+        ? `CloudFront is deployed at ${distribution.domainName ?? distribution.id}`
+        : `CloudFront distribution status is ${distribution.status ?? "unknown"}`,
   };
 }
