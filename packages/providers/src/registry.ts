@@ -1,3 +1,4 @@
+import { acmProvider } from "./acm";
 import { filesystemProvider } from "./filesystem";
 import { nginxProvider } from "./nginx";
 import { route53Provider } from "./route53";
@@ -10,6 +11,7 @@ export const providers = {
   systemd: systemdProvider,
   route53: route53Provider,
   s3: s3Provider,
+  acm: acmProvider,
 };
 
 export function getProvider(name: string) {
