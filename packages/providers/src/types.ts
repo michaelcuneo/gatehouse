@@ -6,10 +6,21 @@ export interface ProviderHealth {
   message?: string;
 }
 
+export interface ProviderDeploymentContext {
+  artifactFingerprint?: string;
+  skipArtifactTransfer?: boolean;
+}
+
 export interface ProviderContext {
   projectStages: ProjectStageContext[];
   dependencies: Resource[];
   dependencyStages: Record<string, ProjectStageContext[]>;
+  deployment?: ProviderDeploymentContext;
+}
+
+export interface ProviderReconcileResult {
+  artifactTransferred?: boolean;
+  message?: string;
 }
 
 export interface Provider {
@@ -18,7 +29,7 @@ export interface Provider {
   reconcile(
     resource: Resource,
     context: ProviderContext,
-  ): Promise<void>;
+  ): Promise<ProviderReconcileResult | void>;
 
   destroy?(
     resource: Resource,
