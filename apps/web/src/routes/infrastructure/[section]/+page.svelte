@@ -2,6 +2,7 @@
   let { data, form } = $props();
   let storageProvider = $state('local');
   let staticDeploymentTarget = $state('local');
+  let cloudFrontEnabled = $state(false);
   const date = (value: string) => new Date(value).toLocaleString();
 </script>
 
@@ -376,6 +377,35 @@
                   placeholder="site/"
                 />
               </div>
+
+              <label class="check-field">
+                <input
+                  name="cloudFrontEnabled"
+                  type="checkbox"
+                  bind:checked={cloudFrontEnabled}
+                />
+                Deliver through CloudFront
+              </label>
+
+              {#if cloudFrontEnabled}
+                <div class="field">
+                  <label for="distributionId">Existing distribution ID</label>
+                  <input
+                    id="distributionId"
+                    name="distributionId"
+                    placeholder="Leave blank for GateHouse-managed CloudFront"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="defaultRootObject">Default root object</label>
+                  <input
+                    id="defaultRootObject"
+                    name="defaultRootObject"
+                    value="index.html"
+                  />
+                </div>
+              {/if}
             {/if}
 
             <label class="check-field">
@@ -396,7 +426,9 @@
                     ? 'Create S3 bucket'
                     : 'Create local storage'
                   : staticDeploymentTarget === 's3'
-                    ? 'Deploy to S3'
+                    ? cloudFrontEnabled
+                      ? 'Deploy to S3 + CloudFront'
+                      : 'Deploy to S3'
                     : 'Deploy static site'}
           </button>
         </div>
