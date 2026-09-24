@@ -455,3 +455,74 @@ export async function disableGateHouseDistribution(
     }),
   );
 }
+
+
+export async function findGateHouseDistributionByResource(
+  stage: ManagedStage,
+  resourceId: string,
+  distributionId?: string,
+): Promise<CloudFrontDistributionState | null> {
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+
+  if (distributionId) {
+    try {
+      const result = await cloudFront.send(
+        new GetDistributionCommand({
+          Id: distributionId,
+        }),
+      );
+
+      return result.Distribution
+        ? {
+            id: result.Distribution.Id ?? distributionId,
+            domainName: result.Distribution.DomainName,
+            status: result.Distribution.Status,
+            enabled:
+              result.Distribution.DistributionConfig?.Enabled ?? false,
+          }
+        : null;
+    } catch (cause) {
+      const name =
+        cause && typeof cause === "object" && "name" in cause
+          ? String((cause as { name?: unknown }).name)
+          : "";
+
+      if (name === "NoSuchDistribution") {
+        return null;
+      }
+
+      throw cause;
+    }
+  }
+
+  let marker: string | undefined;
+
+  do {
+    const result = await cloudFront.send(
+      new ListDistributionsCommand({
+        Marker: marker,
+      }),
+    );
+
+    const match = result.DistributionList?.Items?.find(
+      (distribution) =>
+        distribution.Comment ===
+        `Managed by GateHouse static site ${resourceId}`,
+    );
+
+    if (match?.Id) {
+      return {
+        id: match.Id,
+        domainName: match.DomainName,
+        status: match.Status,
+        enabled: match.Enabled ?? false,
+      };
+    }
+
+    marker = result.DistributionList?.IsTruncated
+      ? result.DistributionList.NextMarker
+      : undefined;
+  } while (marker);
+
+  return null;
+}
