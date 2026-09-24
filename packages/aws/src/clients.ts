@@ -3,6 +3,7 @@ import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { Route53Client } from "@aws-sdk/client-route-53";
+import { S3Client } from "@aws-sdk/client-s3";
 import { STSClient } from "@aws-sdk/client-sts";
 
 import type { ManagedStage } from "@gatehouse/core";
@@ -28,6 +29,7 @@ export function awsClientsForStage(
     dynamoDB: new DynamoDBClient(config),
     lambda: new LambdaClient(config),
     route53: new Route53Client(config),
+    s3: new S3Client(config),
     sts: new STSClient(config),
   };
 }
