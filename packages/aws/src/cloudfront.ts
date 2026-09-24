@@ -1,10 +1,13 @@
 import {
   CreateDistributionCommand,
   CreateInvalidationCommand,
+  CreateOriginAccessControlCommand,
+  DeleteOriginAccessControlCommand,
   DeleteDistributionCommand,
   GetDistributionCommand,
   GetDistributionConfigCommand,
   ListDistributionsCommand,
+  ListOriginAccessControlsCommand,
   UpdateDistributionCommand,
 } from "@aws-sdk/client-cloudfront";
 
@@ -34,6 +37,73 @@ function callerReference(resourceId: string): string {
 
 function originId(resourceId: string): string {
   return `gatehouse-s3-${resourceId}`;
+}
+
+function originAccessControlName(resourceId: string): string {
+  return `gatehouse-${resourceId}`.slice(0, 64);
+}
+
+async function findOriginAccessControl(
+  stage: ManagedStage,
+  resourceId: string,
+): Promise<string | null> {
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+  let marker: string | undefined;
+
+  do {
+    const result = await cloudFront.send(
+      new ListOriginAccessControlsCommand({
+        Marker: marker,
+      }),
+    );
+
+    const match = result.OriginAccessControlList?.Items?.find(
+      (item) => item.Name === originAccessControlName(resourceId),
+    );
+
+    if (match?.Id) {
+      return match.Id;
+    }
+
+    marker = result.OriginAccessControlList?.IsTruncated
+      ? result.OriginAccessControlList.NextMarker
+      : undefined;
+  } while (marker);
+
+  return null;
+}
+
+async function ensureOriginAccessControl(
+  stage: ManagedStage,
+  resourceId: string,
+): Promise<string> {
+  const existing = await findOriginAccessControl(stage, resourceId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+
+  const result = await cloudFront.send(
+    new CreateOriginAccessControlCommand({
+      OriginAccessControlConfig: {
+        Name: originAccessControlName(resourceId),
+        Description: `GateHouse static site ${resourceId}`,
+        OriginAccessControlOriginType: "s3",
+        SigningBehavior: "always",
+        SigningProtocol: "sigv4",
+      },
+    }),
+  );
+
+  const id = result.OriginAccessControl?.Id;
+
+  if (!id) {
+    throw new Error("CloudFront did not return an origin access control id");
+  }
+
+  return id;
 }
 
 function s3OriginDomain(bucket: string, region: string): string {
@@ -135,6 +205,10 @@ export async function ensureGateHouseDistribution(
   }
 
   const cloudFront = awsClientsForStage(stage).cloudFront;
+  const originAccessControlId = await ensureOriginAccessControl(
+    stage,
+    spec.resourceId,
+  );
 
   const result = await cloudFront.send(
     new CreateDistributionCommand({
@@ -153,6 +227,7 @@ export async function ensureGateHouseDistribution(
                 spec.bucketRegion,
               ),
               OriginPath: originPath(spec.prefix),
+              OriginAccessControlId: originAccessControlId,
               S3OriginConfig: {
                 OriginAccessIdentity: "",
               },
@@ -307,4 +382,17 @@ export async function disableAndDeleteGateHouseDistribution(
       IfMatch: latestConfig.ETag,
     }),
   );
+
+  const originAccessControlId = await findOriginAccessControl(
+    stage,
+    spec.resourceId,
+  );
+
+  if (originAccessControlId) {
+    await cloudFront.send(
+      new DeleteOriginAccessControlCommand({
+        Id: originAccessControlId,
+      }),
+    );
+  }
 }
