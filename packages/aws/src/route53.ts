@@ -221,3 +221,163 @@ export async function upsertRoute53RecordInBestZone(
     }),
   );
 }
+
+
+const CLOUDFRONT_HOSTED_ZONE_ID = "Z2FDTNDATAQYW2";
+
+async function findRecordInBestZone(
+  stage: ManagedStage,
+  name: string,
+  type: "A" | "AAAA",
+): Promise<ResourceRecordSet | null> {
+  const { route53 } = awsClientsForStage(stage);
+  const HostedZoneId = await bestHostedZoneId(stage, name);
+
+  const result = await route53.send(
+    new ListResourceRecordSetsCommand({
+      HostedZoneId,
+      StartRecordName: fqdn(name),
+      StartRecordType: type,
+      MaxItems: 1,
+    }),
+  );
+
+  const record = result.ResourceRecordSets?.[0];
+
+  if (
+    !record ||
+    normalizeDnsName(record.Name ?? "") !== normalizeDnsName(name) ||
+    record.Type !== type
+  ) {
+    return null;
+  }
+
+  return record;
+}
+
+function cloudFrontAliasRecord(
+  hostname: string,
+  distributionDomain: string,
+  type: "A" | "AAAA",
+): ResourceRecordSet {
+  return {
+    Name: fqdn(hostname),
+    Type: type,
+    AliasTarget: {
+      DNSName: fqdn(distributionDomain),
+      HostedZoneId: CLOUDFRONT_HOSTED_ZONE_ID,
+      EvaluateTargetHealth: false,
+    },
+  };
+}
+
+function aliasPointsToCloudFront(
+  record: ResourceRecordSet,
+  distributionDomain: string,
+): boolean {
+  return (
+    normalizeDnsName(record.AliasTarget?.DNSName ?? "") ===
+      normalizeDnsName(distributionDomain) &&
+    record.AliasTarget?.HostedZoneId === CLOUDFRONT_HOSTED_ZONE_ID
+  );
+}
+
+export async function ensureRoute53CloudFrontAliases(
+  stage: ManagedStage,
+  hostname: string,
+  distributionDomain: string,
+): Promise<void> {
+  const { route53 } = awsClientsForStage(stage);
+  const HostedZoneId = await bestHostedZoneId(stage, hostname);
+
+  for (const type of ["A", "AAAA"] as const) {
+    const existing = await findRecordInBestZone(
+      stage,
+      hostname,
+      type,
+    );
+
+    if (existing && !aliasPointsToCloudFront(existing, distributionDomain)) {
+      throw new Error(
+        `Refusing to overwrite existing Route53 ${type} record for "${hostname}"`,
+      );
+    }
+
+    await route53.send(
+      new ChangeResourceRecordSetsCommand({
+        HostedZoneId,
+        ChangeBatch: {
+          Comment: "Managed by GateHouse CloudFront static site",
+          Changes: [
+            {
+              Action: "UPSERT",
+              ResourceRecordSet: cloudFrontAliasRecord(
+                hostname,
+                distributionDomain,
+                type,
+              ),
+            },
+          ],
+        },
+      }),
+    );
+  }
+}
+
+export async function removeRoute53CloudFrontAliases(
+  stage: ManagedStage,
+  hostname: string,
+  distributionDomain: string,
+): Promise<void> {
+  const { route53 } = awsClientsForStage(stage);
+  const HostedZoneId = await bestHostedZoneId(stage, hostname);
+
+  for (const type of ["A", "AAAA"] as const) {
+    const existing = await findRecordInBestZone(
+      stage,
+      hostname,
+      type,
+    );
+
+    if (!existing) {
+      continue;
+    }
+
+    if (!aliasPointsToCloudFront(existing, distributionDomain)) {
+      continue;
+    }
+
+    await route53.send(
+      new ChangeResourceRecordSetsCommand({
+        HostedZoneId,
+        ChangeBatch: {
+          Comment: "Removed by GateHouse CloudFront static site",
+          Changes: [
+            {
+              Action: "DELETE",
+              ResourceRecordSet: existing,
+            },
+          ],
+        },
+      }),
+    );
+  }
+}
+
+export async function route53CloudFrontAliasesHealthy(
+  stage: ManagedStage,
+  hostname: string,
+  distributionDomain: string,
+): Promise<boolean> {
+  const records = await Promise.all(
+    (["A", "AAAA"] as const).map((type) =>
+      findRecordInBestZone(stage, hostname, type),
+    ),
+  );
+
+  return records.every(
+    (record) =>
+      record !== null &&
+      aliasPointsToCloudFront(record, distributionDomain),
+  );
+}
