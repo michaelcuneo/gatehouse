@@ -1,3 +1,4 @@
+import { ACMClient } from "@aws-sdk/client-acm";
 import { CloudFrontClient } from "@aws-sdk/client-cloudfront";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
@@ -25,6 +26,7 @@ export function awsClientsForStage(
   const config = configForStage(stage, region);
 
   return {
+    acm: new ACMClient(config),
     cloudFront: new CloudFrontClient({
       ...config,
       region: "us-east-1",
