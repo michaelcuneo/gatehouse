@@ -64,7 +64,9 @@ export const actions: Actions = {
     }
 
     try {
-      await reconcileResource(resource.id);
+      await reconcileResource(resource.id, {
+        forceDeployment: true
+      });
 
       return {
         success: true,
