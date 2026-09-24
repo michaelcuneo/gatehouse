@@ -63,16 +63,18 @@
     {/if}
   </section>
 
-  {#if data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
+  {#if data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
     <div class="section-head">
       <div>
         <span class="eyebrow">Desired state</span>
         <h2>
-          {data.section.kind === 'service'
-            ? 'Create managed service'
-            : data.section.kind === 'storage_bucket'
-              ? 'Create local storage'
-              : 'Create static deployment'}
+          {data.section.kind === 'dns_record'
+            ? 'Create Route53 record'
+            : data.section.kind === 'service'
+              ? 'Create managed service'
+              : data.section.kind === 'storage_bucket'
+                ? 'Create local storage'
+                : 'Create static deployment'}
         </h2>
       </div>
     </div>
@@ -89,7 +91,66 @@
             <input id="name" name="name" required />
           </div>
 
-          {#if data.section.kind === 'service'}
+          {#if data.section.kind === 'dns_record'}
+            <div class="field">
+              <label for="stageId">Project stage</label>
+              <select id="stageId" name="stageId" required>
+                <option value="">Select target stage</option>
+                {#each data.projectStages as stage}
+                  <option value={stage.stageId}>
+                    {stage.label} · {stage.accountId} · {stage.region}
+                  </option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="zone">Hosted zone</label>
+              <input
+                id="zone"
+                name="zone"
+                placeholder="example.com"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="recordName">Record name</label>
+              <input
+                id="recordName"
+                name="recordName"
+                placeholder="api.example.com"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="recordType">Record type</label>
+              <select id="recordType" name="recordType">
+                <option value="A">A</option>
+                <option value="AAAA">AAAA</option>
+                <option value="CNAME">CNAME</option>
+                <option value="TXT">TXT</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="value">Record value</label>
+              <input id="value" name="value" required />
+            </div>
+
+            <div class="field">
+              <label for="ttl">TTL</label>
+              <input
+                id="ttl"
+                name="ttl"
+                type="number"
+                min="1"
+                value="300"
+                required
+              />
+            </div>
+          {:else if data.section.kind === 'service'}
             <div class="field">
               <label for="runtime">Runtime</label>
               <select id="runtime" name="runtime">
@@ -241,11 +302,13 @@
 
         <div class="actions">
           <button class="button" type="submit">
-            {data.section.kind === 'service'
-              ? 'Create service'
-              : data.section.kind === 'storage_bucket'
-                ? 'Create and reconcile'
-                : 'Deploy static site'}
+            {data.section.kind === 'dns_record'
+              ? 'Create DNS record'
+              : data.section.kind === 'service'
+                ? 'Create service'
+                : data.section.kind === 'storage_bucket'
+                  ? 'Create and reconcile'
+                  : 'Deploy static site'}
           </button>
         </div>
       </form>
