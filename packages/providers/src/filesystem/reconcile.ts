@@ -28,6 +28,10 @@ export async function reconcileFilesystemResource(
   }
 
   if (resource.kind === "static_site") {
+    if (!resource.spec.outputDirectory) {
+      throw new Error("Filesystem static site output directory is required");
+    }
+
     await deployDirectory(
       filesystemPath(resource.spec.buildDirectory),
       filesystemPath(resource.spec.outputDirectory),
@@ -58,7 +62,7 @@ export async function destroyFilesystemResource(
   }
 
   if (resource.kind === "static_site") {
-    if (resource.metadata?.managed === true) {
+    if (resource.metadata?.managed === true && resource.spec.outputDirectory) {
       await removeManagedDirectory(
         filesystemPath(resource.spec.outputDirectory),
       );
@@ -77,7 +81,7 @@ export async function healthFilesystemResource(resource: Resource) {
       ? resource.spec.provider === "local"
         ? filesystemPath(resource.spec.path)
         : null
-      : resource.kind === "static_site"
+      : resource.kind === "static_site" && resource.spec.outputDirectory
         ? filesystemPath(resource.spec.outputDirectory)
         : null;
 
