@@ -1,5 +1,22 @@
 import { getDatabase } from "./client";
 
+type TableInfoRow = {
+  name: string;
+};
+
+function ensureDeploymentColumns(): void {
+  const sqlite = getDatabase();
+  const columns = sqlite
+    .prepare("PRAGMA table_info(deployments)")
+    .all() as TableInfoRow[];
+
+  if (!columns.some((column) => column.name === "artifact_fingerprint")) {
+    sqlite.exec(
+      "ALTER TABLE deployments ADD COLUMN artifact_fingerprint TEXT",
+    );
+  }
+}
+
 export function initDatabase() {
   const sqlite = getDatabase();
 
@@ -93,6 +110,7 @@ export function initDatabase() {
       status TEXT NOT NULL,
       started_at TEXT NOT NULL,
       completed_at TEXT,
+      artifact_fingerprint TEXT,
       message TEXT
     );
 
@@ -102,4 +120,6 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_deployments_started
       ON deployments(started_at DESC);
   `);
+
+  ensureDeploymentColumns();
 }
