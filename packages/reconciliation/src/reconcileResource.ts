@@ -1,4 +1,6 @@
 import {
+  finishDeployment,
+  startDeployment,
   updateResourceState,
   writeAuditLog,
 } from "@gatehouse/db";
@@ -11,6 +13,12 @@ import type { Resource } from "@gatehouse/types";
 
 import { planReconciliation } from "./planReconciliation";
 import { providerContextForResource } from "./providerContext";
+
+function isDeployableResource(
+  resource: Resource,
+): resource is Extract<Resource, { kind: "service" | "static_site" }> {
+  return resource.kind === "service" || resource.kind === "static_site";
+}
 
 async function applyResource(resource: Resource): Promise<void> {
   const provider = getProvider(resource.provider);
@@ -33,7 +41,21 @@ async function applyResource(resource: Resource): Promise<void> {
     updatedAt: startedAt,
   });
 
+  let deploymentId: string | null = null;
+
   try {
+    if (resource.enabled && isDeployableResource(resource)) {
+      deploymentId = startDeployment({
+        resourceId: resource.id,
+        resourceName: resource.name,
+        resourceKind: resource.kind,
+        provider: resource.provider,
+        resourceVersion: resource.version,
+        startedAt,
+        message: `Deploying with ${resource.provider}`,
+      }).id;
+    }
+
     if (resource.enabled) {
       await provider.reconcile(resource, context);
     } else if (provider.destroy) {
@@ -41,6 +63,14 @@ async function applyResource(resource: Resource): Promise<void> {
     }
 
     const completedAt = new Date().toISOString();
+
+    if (deploymentId) {
+      finishDeployment(deploymentId, {
+        status: "succeeded",
+        completedAt,
+        message: `Deployment completed with ${resource.provider}`,
+      });
+    }
 
     updateResourceState(resource.id, {
       status: resource.enabled ? "ready" : "disabled",
@@ -66,6 +96,14 @@ async function applyResource(resource: Resource): Promise<void> {
   } catch (cause) {
     const failedAt = new Date().toISOString();
     const message = cause instanceof Error ? cause.message : String(cause);
+
+    if (deploymentId) {
+      finishDeployment(deploymentId, {
+        status: "failed",
+        completedAt: failedAt,
+        message,
+      });
+    }
 
     updateResourceState(resource.id, {
       status: "error",

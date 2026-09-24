@@ -82,5 +82,24 @@ export function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp
       ON audit_logs(timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS deployments (
+      id TEXT PRIMARY KEY,
+      resource_id TEXT NOT NULL,
+      resource_name TEXT NOT NULL,
+      resource_kind TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      resource_version INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      message TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_deployments_resource
+      ON deployments(resource_id, started_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_deployments_started
+      ON deployments(started_at DESC);
   `);
 }
