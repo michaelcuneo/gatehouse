@@ -17,11 +17,14 @@
   };
 
   const statusClass = (status: string) =>
-    status === 'succeeded'
+    status === 'succeeded' || status === 'skipped'
       ? 'status-ready'
       : status === 'failed'
         ? 'status-error'
         : 'status-reconciling';
+
+  const fingerprint = (value?: string) =>
+    value ? value.replace('sha256:', '').slice(0, 12) : '—';
 </script>
 
 <main class="container">
@@ -127,6 +130,7 @@
             <th>Kind</th>
             <th>Provider</th>
             <th>Version</th>
+            <th>Artifact</th>
             <th>Result</th>
             <th>Duration</th>
             <th>Message</th>
@@ -144,6 +148,7 @@
               <td class="mono">{deployment.resourceKind}</td>
               <td>{deployment.provider}</td>
               <td class="mono">v{deployment.resourceVersion}</td>
+              <td class="mono">{fingerprint(deployment.artifactFingerprint)}</td>
               <td>
                 <span class={`status ${statusClass(deployment.status)}`}>
                   {deployment.status}
