@@ -201,7 +201,7 @@
                 <label for="staticSiteId">CloudFront static site</label>
                 <select id="staticSiteId" name="staticSiteId" required>
                   <option value="">Select static site</option>
-                  {#each data.staticSites.filter((site) => site.provider === 's3' && site.spec.cloudFront?.enabled) as site}
+                  {#each data.staticSites.filter((site) => site.provider === 's3' && site.cloudFrontEnabled) as site}
                     <option value={site.id}>{site.name}</option>
                   {/each}
                 </select>
