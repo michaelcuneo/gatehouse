@@ -5,3 +5,4 @@ export * from "./nginx";
 export * from "./filesystem";
 export * from "./systemd";
 export * from "./route53";
+export * from "./s3";
