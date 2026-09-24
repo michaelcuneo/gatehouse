@@ -14,6 +14,9 @@ function dependencyIds(resource: Resource): string[] {
   if (resource.kind === "static_site") {
     if (resource.spec.endpointId) ids.add(resource.spec.endpointId);
     if (resource.spec.storageId) ids.add(resource.spec.storageId);
+    if (resource.spec.cloudFront?.certificateId) {
+      ids.add(resource.spec.cloudFront.certificateId);
+    }
   }
 
   return [...ids];
