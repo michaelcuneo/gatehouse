@@ -11,7 +11,7 @@ import type { ManagedStage } from "@gatehouse/core";
 
 import { awsClientsForStage } from "./clients";
 import {
-  upsertRoute53Record,
+  upsertRoute53RecordInBestZone,
   type Route53RecordSpec,
 } from "./route53";
 
@@ -29,7 +29,7 @@ export interface AcmCertificateState {
   status?: string;
   domainName?: string;
   inUseBy: string[];
-  validationRecords: Route53RecordSpec[];
+  validationRecords: Array<Omit<Route53RecordSpec, "zone">>;
 }
 
 function normalizedDomains(spec: AcmCertificateSpec): string[] {
@@ -165,8 +165,10 @@ async function findManagedCertificateArn(
   return null;
 }
 
-function validationRecords(detail: CertificateDetail): Route53RecordSpec[] {
-  const records: Route53RecordSpec[] = [];
+function validationRecords(
+  detail: CertificateDetail,
+): Array<Omit<Route53RecordSpec, "zone">> {
+  const records: Array<Omit<Route53RecordSpec, "zone">> = [];
 
   for (const option of detail.DomainValidationOptions ?? []) {
     const record = option.ResourceRecord;
@@ -175,12 +177,7 @@ function validationRecords(detail: CertificateDetail): Route53RecordSpec[] {
       continue;
     }
 
-    const domain = option.DomainName ?? detail.DomainName;
-
-    if (!domain) continue;
-
     records.push({
-      zone: domain.replace(/^\*\./, ""),
       name: record.Name,
       type: "CNAME",
       value: record.Value,
@@ -254,7 +251,7 @@ export async function reconcileAcmDnsValidation(
   state: AcmCertificateState,
 ): Promise<void> {
   for (const record of state.validationRecords) {
-    await upsertRoute53Record(
+    await upsertRoute53RecordInBestZone(
       stage,
       record,
       `GateHouse ACM validation for ${state.arn}`,
