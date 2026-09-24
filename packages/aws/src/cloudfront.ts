@@ -165,8 +165,8 @@ export async function findGateHouseDistribution(
 
     const match = result.DistributionList?.Items?.find(
       (distribution) =>
-        distribution.DistributionConfig?.CallerReference ===
-        callerReference(spec.resourceId),
+        distribution.Comment ===
+        `Managed by GateHouse static site ${spec.resourceId}`,
     );
 
     if (match?.Id) {
@@ -174,7 +174,7 @@ export async function findGateHouseDistribution(
         id: match.Id,
         domainName: match.DomainName,
         status: match.Status,
-        enabled: match.DistributionConfig?.Enabled ?? false,
+        enabled: match.Enabled ?? false,
       };
     }
 
