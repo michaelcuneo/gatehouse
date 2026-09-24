@@ -369,6 +369,10 @@ export const actions: Actions = {
       } else if (deploymentTarget === 's3') {
         const storageId = text(form, 'storageId');
         const prefix = text(form, 'prefix');
+        const cloudFrontEnabled = form.get('cloudFrontEnabled') === 'on';
+        const distributionId = text(form, 'distributionId');
+        const defaultRootObject =
+          text(form, 'defaultRootObject') || 'index.html';
 
         if (!storageId) {
           return fail(400, {
@@ -415,6 +419,13 @@ export const actions: Actions = {
             buildDirectory,
             storageId,
             prefix: prefix || undefined,
+            cloudFront: cloudFrontEnabled
+              ? {
+                  enabled: true,
+                  distributionId: distributionId || undefined,
+                  defaultRootObject
+                }
+              : undefined,
             deployOnChange: form.get('deployOnChange') === 'on'
           }
         };
