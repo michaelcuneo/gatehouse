@@ -10,7 +10,10 @@ import {
   type StoredResourceKind
 } from '@gatehouse/db';
 import { reconcileResource } from '@gatehouse/reconciliation';
-import { createResource } from '@gatehouse/resources';
+import {
+  createResource,
+  getResource
+} from '@gatehouse/resources';
 
 const sections: Record<
   string,
@@ -373,12 +376,11 @@ export const actions: Actions = {
           });
         }
 
-        const storageResource = listResources('storage_bucket').find(
-          (candidate) => candidate.id === storageId
-        );
+        const storageResource = getResource(storageId);
 
         if (
           !storageResource ||
+          storageResource.kind !== 'storage_bucket' ||
           storageResource.spec.provider !== 's3'
         ) {
           return fail(400, {
