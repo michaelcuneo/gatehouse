@@ -251,12 +251,20 @@ export async function ensureGateHouseDistribution(
       );
     }
 
+    const currentOrigins = current.DistributionConfig.Origins;
+
+    if (!currentOrigins) {
+      throw new Error(
+        `CloudFront distribution "${existing.id}" has no origins`,
+      );
+    }
+
     const originAccessControlId = await ensureOriginAccessControl(
       stage,
       spec.resourceId,
     );
 
-    const origins = current.DistributionConfig.Origins.Items?.map((origin) =>
+    const origins = currentOrigins.Items?.map((origin) =>
       origin.Id === originId(spec.resourceId)
         ? {
             ...origin,
@@ -280,7 +288,7 @@ export async function ensureGateHouseDistribution(
       Aliases: desiredAliases(spec),
       ViewerCertificate: desiredViewerCertificate(spec),
       Origins: {
-        ...current.DistributionConfig.Origins,
+        Quantity: currentOrigins.Quantity,
         Items: origins,
       },
     };
