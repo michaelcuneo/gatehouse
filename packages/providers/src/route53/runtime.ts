@@ -1,6 +1,6 @@
 import {
   ensureRoute53CloudFrontAliases as ensureAwsCloudFrontAliases,
-  findGateHouseDistribution,
+  findGateHouseDistributionByResource,
   findRoute53Record as findAwsRoute53Record,
   removeRoute53CloudFrontAliases as removeAwsCloudFrontAliases,
   removeRoute53Record as removeAwsRoute53Record,
@@ -63,35 +63,11 @@ async function cloudFrontTarget(
     );
   }
 
-  if (!site.spec.storageId) {
-    throw new Error(
-      `Static site "${site.name}" has no S3 storage dependency`,
-    );
-  }
-
-  const storage = context.dependencies.find(
-    (candidate) => candidate.id === site.spec.storageId,
+  const distribution = await findGateHouseDistributionByResource(
+    stage,
+    site.id,
+    site.spec.cloudFront.distributionId,
   );
-
-  if (
-    !storage ||
-    storage.kind !== "storage_bucket" ||
-    storage.spec.provider !== "s3"
-  ) {
-    throw new Error(
-      `Static site "${site.name}" requires its S3 storage dependency`,
-    );
-  }
-
-  const distribution = await findGateHouseDistribution(stage, {
-    resourceId: site.id,
-    bucket: storage.spec.bucket,
-    bucketRegion: storage.spec.region,
-    prefix: site.spec.prefix,
-    distributionId: site.spec.cloudFront.distributionId,
-    defaultRootObject: site.spec.cloudFront.defaultRootObject ?? "index.html",
-    aliases: site.spec.cloudFront.aliases,
-  });
 
   if (!distribution?.domainName) {
     throw new Error(
