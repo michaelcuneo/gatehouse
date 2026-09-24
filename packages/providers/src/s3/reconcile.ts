@@ -8,9 +8,15 @@ import {
 import type { Resource } from "@gatehouse/types";
 import type { ProviderContext } from "../types";
 
+import {
+  destroyS3StaticSite,
+  healthS3StaticSite,
+  reconcileS3StaticSite,
+  validateS3StaticSite,
+} from "./staticSite";
 import { validateS3Resource } from "./validate";
 
-function target(resource: Resource, context: ProviderContext) {
+function storageTarget(resource: Resource, context: ProviderContext) {
   validateS3Resource(resource, context);
 
   if (
@@ -41,7 +47,13 @@ export async function reconcileS3Resource(
   resource: Resource,
   context: ProviderContext,
 ): Promise<void> {
-  const resolved = target(resource, context);
+  if (resource.kind === "static_site") {
+    validateS3StaticSite(resource, context);
+    await reconcileS3StaticSite(resource, context);
+    return;
+  }
+
+  const resolved = storageTarget(resource, context);
 
   await reconcileS3Bucket(resolved.stage, resolved.spec);
 }
@@ -50,7 +62,13 @@ export async function destroyS3Resource(
   resource: Resource,
   context: ProviderContext,
 ): Promise<void> {
-  const resolved = target(resource, context);
+  if (resource.kind === "static_site") {
+    validateS3StaticSite(resource, context);
+    await destroyS3StaticSite(resource, context);
+    return;
+  }
+
+  const resolved = storageTarget(resource, context);
 
   if (resource.metadata?.managed !== true) {
     return;
@@ -63,7 +81,12 @@ export async function healthS3Resource(
   resource: Resource,
   context: ProviderContext,
 ) {
-  const resolved = target(resource, context);
+  if (resource.kind === "static_site") {
+    validateS3StaticSite(resource, context);
+    return healthS3StaticSite(resource, context);
+  }
+
+  const resolved = storageTarget(resource, context);
   const exists = await s3BucketExists(resolved.stage, resolved.spec);
 
   if (!exists) {
