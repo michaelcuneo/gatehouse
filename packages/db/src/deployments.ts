@@ -1,6 +1,10 @@
 import { getDatabase } from "./client";
 
-export type DeploymentStatus = "running" | "succeeded" | "failed";
+export type DeploymentStatus =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "skipped";
 export type DeploymentResourceKind = "service" | "static_site";
 
 export interface StoredDeployment {
@@ -13,6 +17,7 @@ export interface StoredDeployment {
   status: DeploymentStatus;
   startedAt: string;
   completedAt?: string;
+  artifactFingerprint?: string;
   message?: string;
 }
 
@@ -26,6 +31,7 @@ type DeploymentRow = {
   status: DeploymentStatus;
   started_at: string;
   completed_at: string | null;
+  artifact_fingerprint: string | null;
   message: string | null;
 };
 
@@ -40,15 +46,55 @@ function fromRow(row: DeploymentRow): StoredDeployment {
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at ?? undefined,
+    artifactFingerprint: row.artifact_fingerprint ?? undefined,
     message: row.message ?? undefined,
   };
 }
 
-function getDeployment(id: string): StoredDeployment | null {
+function getDeploymentById(id: string): StoredDeployment | null {
   const db = getDatabase();
   const row = db
     .prepare("SELECT * FROM deployments WHERE id = ? LIMIT 1")
     .get(id) as DeploymentRow | undefined;
+
+  return row ? fromRow(row) : null;
+}
+
+export function getLatestDeployment(
+  resourceId: string,
+): StoredDeployment | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT *
+        FROM deployments
+        WHERE resource_id = ?
+        ORDER BY started_at DESC
+        LIMIT 1
+      `,
+    )
+    .get(resourceId) as DeploymentRow | undefined;
+
+  return row ? fromRow(row) : null;
+}
+
+export function getLatestSuccessfulDeployment(
+  resourceId: string,
+): StoredDeployment | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT *
+        FROM deployments
+        WHERE resource_id = ?
+          AND status IN ('succeeded', 'skipped')
+        ORDER BY started_at DESC
+        LIMIT 1
+      `,
+    )
+    .get(resourceId) as DeploymentRow | undefined;
 
   return row ? fromRow(row) : null;
 }
@@ -74,6 +120,7 @@ export function startDeployment(
     resourceVersion: input.resourceVersion,
     status: "running",
     startedAt: input.startedAt ?? new Date().toISOString(),
+    artifactFingerprint: input.artifactFingerprint,
     message: input.message,
   };
 
@@ -89,9 +136,10 @@ export function startDeployment(
         status,
         started_at,
         completed_at,
+        artifact_fingerprint,
         message
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     deployment.id,
@@ -103,6 +151,7 @@ export function startDeployment(
     deployment.status,
     deployment.startedAt,
     null,
+    deployment.artifactFingerprint ?? null,
     deployment.message ?? null,
   );
 
@@ -114,6 +163,7 @@ export function finishDeployment(
   input: {
     status: Exclude<DeploymentStatus, "running">;
     completedAt?: string;
+    artifactFingerprint?: string;
     message?: string;
   },
 ): StoredDeployment | null {
@@ -125,17 +175,19 @@ export function finishDeployment(
       UPDATE deployments
       SET status = ?,
           completed_at = ?,
+          artifact_fingerprint = ?,
           message = ?
       WHERE id = ?
     `,
   ).run(
     input.status,
     completedAt,
+    input.artifactFingerprint ?? null,
     input.message ?? null,
     id,
   );
 
-  return getDeployment(id);
+  return getDeploymentById(id);
 }
 
 export function listDeployments(options?: {
