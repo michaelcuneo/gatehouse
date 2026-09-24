@@ -1,3 +1,4 @@
+import { CloudFrontClient } from "@aws-sdk/client-cloudfront";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -24,6 +25,10 @@ export function awsClientsForStage(
   const config = configForStage(stage, region);
 
   return {
+    cloudFront: new CloudFrontClient({
+      ...config,
+      region: "us-east-1",
+    }),
     cloudWatch: new CloudWatchClient(config),
     logs: new CloudWatchLogsClient(config),
     dynamoDB: new DynamoDBClient(config),
