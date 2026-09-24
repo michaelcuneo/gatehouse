@@ -3,6 +3,7 @@
   let storageProvider = $state('local');
   let staticDeploymentTarget = $state('local');
   let cloudFrontEnabled = $state(false);
+  let dnsMode = $state('value');
   const date = (value: string) => new Date(value).toLocaleString();
 </script>
 
@@ -164,6 +165,18 @@
             </div>
 
             <div class="field">
+              <label for="dnsMode">DNS mode</label>
+              <select
+                id="dnsMode"
+                name="dnsMode"
+                bind:value={dnsMode}
+              >
+                <option value="value">Value record</option>
+                <option value="cloudfront_alias">CloudFront alias</option>
+              </select>
+            </div>
+
+            <div class="field">
               <label for="zone">Hosted zone</label>
               <input
                 id="zone"
@@ -178,37 +191,49 @@
               <input
                 id="recordName"
                 name="recordName"
-                placeholder="api.example.com"
+                placeholder="www.example.com"
                 required
               />
             </div>
 
-            <div class="field">
-              <label for="recordType">Record type</label>
-              <select id="recordType" name="recordType">
-                <option value="A">A</option>
-                <option value="AAAA">AAAA</option>
-                <option value="CNAME">CNAME</option>
-                <option value="TXT">TXT</option>
-              </select>
-            </div>
+            {#if dnsMode === 'cloudfront_alias'}
+              <div class="field">
+                <label for="staticSiteId">CloudFront static site</label>
+                <select id="staticSiteId" name="staticSiteId" required>
+                  <option value="">Select static site</option>
+                  {#each data.staticSites.filter((site) => site.provider === 's3' && site.spec.cloudFront?.enabled) as site}
+                    <option value={site.id}>{site.name}</option>
+                  {/each}
+                </select>
+              </div>
+            {:else}
+              <div class="field">
+                <label for="recordType">Record type</label>
+                <select id="recordType" name="recordType">
+                  <option value="A">A</option>
+                  <option value="AAAA">AAAA</option>
+                  <option value="CNAME">CNAME</option>
+                  <option value="TXT">TXT</option>
+                </select>
+              </div>
 
-            <div class="field">
-              <label for="value">Record value</label>
-              <input id="value" name="value" required />
-            </div>
+              <div class="field">
+                <label for="value">Record value</label>
+                <input id="value" name="value" required />
+              </div>
 
-            <div class="field">
-              <label for="ttl">TTL</label>
-              <input
-                id="ttl"
-                name="ttl"
-                type="number"
-                min="1"
-                value="300"
-                required
-              />
-            </div>
+              <div class="field">
+                <label for="ttl">TTL</label>
+                <input
+                  id="ttl"
+                  name="ttl"
+                  type="number"
+                  min="1"
+                  value="300"
+                  required
+                />
+              </div>
+            {/if}
           {:else if data.section.kind === 'service'}
             <div class="field">
               <label for="runtime">Runtime</label>
