@@ -9,6 +9,7 @@ export interface ProviderHealth {
 export interface ProviderContext {
   projectStages: ProjectStageContext[];
   dependencies: Resource[];
+  dependencyStages: Record<string, ProjectStageContext[]>;
 }
 
 export interface Provider {
