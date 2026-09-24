@@ -11,6 +11,13 @@ import type { Resource } from "@gatehouse/types";
 function dependencyIds(resource: Resource): string[] {
   const ids = new Set(resource.metadata?.dependsOn ?? []);
 
+  if (
+    resource.kind === "dns_record" &&
+    resource.spec.mode === "cloudfront_alias"
+  ) {
+    ids.add(resource.spec.staticSiteId);
+  }
+
   if (resource.kind === "static_site") {
     if (resource.spec.endpointId) ids.add(resource.spec.endpointId);
     if (resource.spec.storageId) ids.add(resource.spec.storageId);
