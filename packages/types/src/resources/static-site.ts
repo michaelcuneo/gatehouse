@@ -15,11 +15,6 @@ export interface StaticSiteCloudFrontSpec {
   aliases?: string[];
 
   certificateId?: ResourceId;
-
-  /**
-   * Manage Route53 A/AAAA aliases for custom hostnames.
-   */
-  manageDns?: boolean;
 }
 
 export interface StaticSiteSpec {
