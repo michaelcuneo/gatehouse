@@ -8,6 +8,7 @@ export interface ProviderHealth {
 
 export interface ProviderContext {
   projectStages: ProjectStageContext[];
+  dependencies: Resource[];
 }
 
 export interface Provider {
