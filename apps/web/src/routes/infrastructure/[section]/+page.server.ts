@@ -1,7 +1,12 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-import { listResources, type StoredResourceKind } from '@gatehouse/db';
+import {
+  attachResourceToStage,
+  listManagedProjects,
+  listResources,
+  type StoredResourceKind
+} from '@gatehouse/db';
 import { reconcileResource } from '@gatehouse/reconciliation';
 import { createResource } from '@gatehouse/resources';
 
@@ -53,6 +58,18 @@ function serviceRuntime(value: string) {
   }
 }
 
+function dnsRecordType(value: string) {
+  switch (value) {
+    case 'A':
+    case 'AAAA':
+    case 'CNAME':
+    case 'TXT':
+      return value;
+    default:
+      return null;
+  }
+}
+
 function serviceProtocol(value: string) {
   switch (value) {
     case 'http':
@@ -75,7 +92,17 @@ export const load: PageServerLoad = async ({ params }) => {
     section,
     resources: listResources(section.kind),
     endpoints: listResources('endpoint'),
-    storage: listResources('storage_bucket')
+    storage: listResources('storage_bucket'),
+    projectStages: listManagedProjects().flatMap((project) =>
+      project.stages
+        .filter((stage) => stage.enabled)
+        .map((stage) => ({
+          stageId: stage.id,
+          label: `${project.name} / ${stage.name}`,
+          accountId: stage.accountId,
+          region: stage.primaryRegion
+        }))
+    )
   };
 };
 
@@ -97,7 +124,56 @@ export const actions: Actions = {
     const now = new Date().toISOString();
     let resource: Resource;
 
-    if (params.section === 'services') {
+    let stageId: string | undefined;
+
+    if (params.section === 'dns') {
+      const zone = text(form, 'zone');
+      const recordName = text(form, 'recordName');
+      const recordType = dnsRecordType(text(form, 'recordType'));
+      const value = text(form, 'value');
+      const ttl = Number(text(form, 'ttl') || 300);
+      stageId = text(form, 'stageId');
+
+      if (!stageId) {
+        return fail(400, {
+          error: 'A project stage is required for Route53 resources.'
+        });
+      }
+
+      if (!zone || !recordName || !recordType || !value) {
+        return fail(400, {
+          error: 'Hosted zone, record name, type and value are required.'
+        });
+      }
+
+      if (!Number.isInteger(ttl) || ttl < 1 || ttl > 2147483647) {
+        return fail(400, {
+          error: 'TTL must be a positive integer.'
+        });
+      }
+
+      resource = {
+        id: crypto.randomUUID(),
+        kind: 'dns_record',
+        name,
+        provider: 'route53',
+        version: 1,
+        enabled: true,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          managed: true
+        },
+        spec: {
+          zone,
+          name: recordName,
+          type: recordType,
+          value,
+          ttl
+        }
+      };
+    } else if (params.section === 'services') {
       const runtime = serviceRuntime(text(form, 'runtime'));
       const workingDirectory = text(form, 'workingDirectory');
       const startCommand = text(form, 'startCommand');
@@ -235,6 +311,11 @@ export const actions: Actions = {
 
     try {
       createResource(resource);
+
+      if (stageId) {
+        attachResourceToStage(stageId, resource.id);
+      }
+
       await reconcileResource(resource.id);
 
       return { success: true };
