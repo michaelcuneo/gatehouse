@@ -196,6 +196,9 @@ importers:
       '@gatehouse/resources':
         specifier: workspace:*
         version: link:../resources
+      '@gatehouse/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@gatehouse/types':
         specifier: workspace:*
         version: link:../types
