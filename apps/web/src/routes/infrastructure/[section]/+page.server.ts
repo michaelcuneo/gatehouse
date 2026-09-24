@@ -98,6 +98,7 @@ export const load: PageServerLoad = async ({ params }) => {
     resources: listResources(section.kind),
     endpoints: listResources('endpoint'),
     storage: listResources('storage_bucket'),
+    certificates: listResources('certificate'),
     projectStages: listManagedProjects().flatMap((project) =>
       project.stages
         .filter((stage) => stage.enabled)
@@ -424,6 +425,11 @@ export const actions: Actions = {
         const distributionId = text(form, 'distributionId');
         const defaultRootObject =
           text(form, 'defaultRootObject') || 'index.html';
+        const aliases = text(form, 'aliases')
+          .split(',')
+          .map((alias) => alias.trim().toLowerCase())
+          .filter(Boolean);
+        const certificateId = text(form, 'certificateId');
 
         if (!storageId) {
           return fail(400, {
@@ -453,6 +459,58 @@ export const actions: Actions = {
 
         stageId = stageIds[0];
 
+        if (cloudFrontEnabled) {
+          if (aliases.length && !certificateId) {
+            return fail(400, {
+              error: 'Custom CloudFront hostnames require an ACM certificate.'
+            });
+          }
+
+          if (certificateId && !aliases.length) {
+            return fail(400, {
+              error: 'An ACM certificate requires at least one custom CloudFront hostname.'
+            });
+          }
+
+          if (distributionId && (aliases.length || certificateId)) {
+            return fail(400, {
+              error: 'GateHouse does not modify aliases or certificates on adopted CloudFront distributions.'
+            });
+          }
+
+          if (certificateId) {
+            const certificate = getResource(certificateId);
+
+            if (
+              !certificate ||
+              certificate.kind !== 'certificate' ||
+              certificate.spec.provider !== 'aws_acm'
+            ) {
+              return fail(400, {
+                error: 'The selected certificate must be an AWS ACM certificate.'
+              });
+            }
+
+            const certificateStageIds =
+              listStageIdsForResource(certificateId);
+
+            if (
+              certificateStageIds.length !== 1 ||
+              certificateStageIds[0] !== stageId
+            ) {
+              return fail(400, {
+                error: 'The selected ACM certificate must belong to the same project stage as the S3 storage resource.'
+              });
+            }
+
+            if ((certificate.spec.region ?? 'us-east-1') !== 'us-east-1') {
+              return fail(400, {
+                error: 'CloudFront ACM certificates must be in us-east-1.'
+              });
+            }
+          }
+        }
+
         resource = {
           id: crypto.randomUUID(),
           kind: 'static_site',
@@ -474,7 +532,9 @@ export const actions: Actions = {
               ? {
                   enabled: true,
                   distributionId: distributionId || undefined,
-                  defaultRootObject
+                  defaultRootObject,
+                  aliases: aliases.length ? aliases : undefined,
+                  certificateId: certificateId || undefined
                 }
               : undefined,
             deployOnChange: form.get('deployOnChange') === 'on'
