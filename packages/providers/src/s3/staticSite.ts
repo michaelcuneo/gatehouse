@@ -17,6 +17,7 @@ import {
 } from "@gatehouse/aws";
 import { ROOT_DIR } from "@gatehouse/runtime";
 import type {
+  AwsAcmCertificateSpec,
   CertificateResource,
   Resource,
   StaticSiteResource,
@@ -187,10 +188,23 @@ function bucketSpec(storage: StorageBucketResource): S3BucketSpec {
   };
 }
 
+type AwsAcmCertificateResource = CertificateResource & {
+  spec: AwsAcmCertificateSpec;
+};
+
+function isAwsAcmCertificate(
+  resource: Resource,
+): resource is AwsAcmCertificateResource {
+  return (
+    resource.kind === "certificate" &&
+    resource.spec.provider === "aws_acm"
+  );
+}
+
 function certificateDependency(
   resource: StaticSiteResource,
   context: ProviderContext,
-): CertificateResource | null {
+): AwsAcmCertificateResource | null {
   const certificateId = resource.spec.cloudFront?.certificateId;
 
   if (!certificateId) {
@@ -203,13 +217,13 @@ function certificateDependency(
       candidate.kind === "certificate",
   );
 
-  if (!dependency || dependency.kind !== "certificate") {
+  if (!dependency) {
     throw new Error(
       `Static site "${resource.name}" requires its configured certificate dependency`,
     );
   }
 
-  if (dependency.spec.provider !== "aws_acm") {
+  if (!isAwsAcmCertificate(dependency)) {
     throw new Error(
       `Static site "${resource.name}" requires an AWS ACM certificate`,
     );
