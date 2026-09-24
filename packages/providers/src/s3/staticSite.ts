@@ -123,6 +123,27 @@ async function collectFiles(directory: string): Promise<string[]> {
   return files.sort();
 }
 
+function requireSameStageDependency(
+  dependencyId: string,
+  dependencyName: string,
+  context: ProviderContext,
+): void {
+  const targetStage = context.projectStages[0]?.stage;
+  const stages = context.dependencyStages[dependencyId] ?? [];
+
+  if (!targetStage || stages.length !== 1) {
+    throw new Error(
+      `Dependency "${dependencyName}" must belong to exactly one project stage`,
+    );
+  }
+
+  if (stages[0].stage.id !== targetStage.id) {
+    throw new Error(
+      `Dependency "${dependencyName}" must belong to the same project stage as the static site`,
+    );
+  }
+}
+
 function storageDependency(
   resource: StaticSiteResource,
   context: ProviderContext,
@@ -144,6 +165,12 @@ function storageDependency(
       `Static site "${resource.name}" requires an S3 storage dependency`,
     );
   }
+
+  requireSameStageDependency(
+    dependency.id,
+    dependency.name,
+    context,
+  );
 
   return dependency;
 }
@@ -187,6 +214,12 @@ function certificateDependency(
       `Static site "${resource.name}" requires an AWS ACM certificate`,
     );
   }
+
+  requireSameStageDependency(
+    dependency.id,
+    dependency.name,
+    context,
+  );
 
   return dependency;
 }
