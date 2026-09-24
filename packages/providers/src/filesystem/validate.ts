@@ -45,8 +45,8 @@ export function validateFilesystemResource(resource: Resource): void {
       throw new Error("Static site build directory is required");
     }
 
-    if (!site.spec.outputDirectory.trim()) {
-      throw new Error("Static site output directory is required");
+    if (!site.spec.outputDirectory?.trim()) {
+      throw new Error("Filesystem static site output directory is required");
     }
 
     assertSafeManagedPath(site.spec.outputDirectory);
