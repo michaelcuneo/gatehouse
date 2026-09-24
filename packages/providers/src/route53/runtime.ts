@@ -37,8 +37,10 @@ function staticSiteDependency(
     throw new Error("Expected CloudFront alias DNS record");
   }
 
+  const staticSiteId = resource.spec.staticSiteId;
+
   const dependency = context.dependencies.find(
-    (candidate) => candidate.id === resource.spec.staticSiteId,
+    (candidate) => candidate.id === staticSiteId,
   );
 
   if (!dependency || dependency.kind !== "static_site") {
