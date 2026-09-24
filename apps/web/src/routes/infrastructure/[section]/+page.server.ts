@@ -6,6 +6,7 @@ import {
   getManagedStageById,
   listManagedProjects,
   listResources,
+  listStageIdsForResource,
   type StoredResourceKind
 } from '@gatehouse/db';
 import { reconcileResource } from '@gatehouse/reconciliation';
@@ -321,38 +322,105 @@ export const actions: Actions = {
         return fail(400, { error: 'Unsupported storage provider.' });
       }
     } else if (params.section === 'static-sites') {
+      const deploymentTarget = text(form, 'deploymentTarget') || 'local';
       const buildDirectory = text(form, 'buildDirectory');
-      const outputDirectory = text(form, 'outputDirectory');
-      const endpointId = text(form, 'endpointId');
-      const storageId = text(form, 'storageId');
 
-      if (!buildDirectory || !outputDirectory) {
+      if (!buildDirectory) {
         return fail(400, {
-          error: 'Build directory and output directory are required.'
+          error: 'Build directory is required.'
         });
       }
 
-      resource = {
-        id: crypto.randomUUID(),
-        kind: 'static_site',
-        name,
-        provider: 'filesystem',
-        version: 1,
-        enabled: true,
-        status: 'pending',
-        createdAt: now,
-        updatedAt: now,
-        metadata: {
-          managed: true
-        },
-        spec: {
-          buildDirectory,
-          outputDirectory,
-          endpointId: endpointId || undefined,
-          storageId: storageId || undefined,
-          deployOnChange: form.get('deployOnChange') === 'on'
+      if (deploymentTarget === 'local') {
+        const outputDirectory = text(form, 'outputDirectory');
+        const endpointId = text(form, 'endpointId');
+        const storageId = text(form, 'storageId');
+
+        if (!outputDirectory) {
+          return fail(400, {
+            error: 'Output directory is required for local static deployments.'
+          });
         }
-      };
+
+        resource = {
+          id: crypto.randomUUID(),
+          kind: 'static_site',
+          name,
+          provider: 'filesystem',
+          version: 1,
+          enabled: true,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          metadata: {
+            managed: true
+          },
+          spec: {
+            buildDirectory,
+            outputDirectory,
+            endpointId: endpointId || undefined,
+            storageId: storageId || undefined,
+            deployOnChange: form.get('deployOnChange') === 'on'
+          }
+        };
+      } else if (deploymentTarget === 's3') {
+        const storageId = text(form, 'storageId');
+        const prefix = text(form, 'prefix');
+
+        if (!storageId) {
+          return fail(400, {
+            error: 'An S3 storage resource is required.'
+          });
+        }
+
+        const storageResource = listResources('storage_bucket').find(
+          (candidate) => candidate.id === storageId
+        );
+
+        if (
+          !storageResource ||
+          storageResource.spec.provider !== 's3'
+        ) {
+          return fail(400, {
+            error: 'The selected storage resource must be an S3 bucket.'
+          });
+        }
+
+        const stageIds = listStageIdsForResource(storageId);
+
+        if (stageIds.length !== 1) {
+          return fail(400, {
+            error: 'The selected S3 storage resource must belong to exactly one project stage.'
+          });
+        }
+
+        stageId = stageIds[0];
+
+        resource = {
+          id: crypto.randomUUID(),
+          kind: 'static_site',
+          name,
+          provider: 's3',
+          version: 1,
+          enabled: true,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          metadata: {
+            managed: true
+          },
+          spec: {
+            buildDirectory,
+            storageId,
+            prefix: prefix || undefined,
+            deployOnChange: form.get('deployOnChange') === 'on'
+          }
+        };
+      } else {
+        return fail(400, {
+          error: 'Unsupported static-site deployment target.'
+        });
+      }
     } else {
       return fail(400, {
         error: `Creation is not implemented for ${section.title} yet.`
