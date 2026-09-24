@@ -194,7 +194,7 @@ export async function ensureAcmCertificate(
 ): Promise<AcmCertificateState> {
   const existingArn = await findManagedCertificateArn(stage, spec);
 
-  let arn = existingArn;
+  let arn: string | undefined = existingArn ?? undefined;
 
   if (!arn) {
     const acm = certificateClient(stage, spec.region);
