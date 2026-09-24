@@ -25,6 +25,38 @@ export function validateRoute53Resource(
     throw new Error("DNS record name is required");
   }
 
+  if (resource.spec.mode === "cloudfront_alias") {
+    if (!resource.spec.staticSiteId) {
+      throw new Error("CloudFront alias requires a static-site dependency");
+    }
+
+    const dependency = context.dependencies.find(
+      (candidate) => candidate.id === resource.spec.staticSiteId,
+    );
+
+    if (!dependency || dependency.kind !== "static_site") {
+      throw new Error(
+        `CloudFront alias "${resource.name}" requires its configured static-site dependency`,
+      );
+    }
+
+    const targetStage = context.projectStages[0]?.stage;
+    const dependencyStages =
+      context.dependencyStages[resource.spec.staticSiteId] ?? [];
+
+    if (
+      !targetStage ||
+      dependencyStages.length !== 1 ||
+      dependencyStages[0].stage.id !== targetStage.id
+    ) {
+      throw new Error(
+        "CloudFront alias and static site must belong to the same project stage",
+      );
+    }
+
+    return;
+  }
+
   if (!resource.spec.value.trim()) {
     throw new Error("DNS record value is required");
   }
