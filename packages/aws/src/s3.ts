@@ -4,9 +4,11 @@ import {
   GetBucketLocationCommand,
   GetPublicAccessBlockCommand,
   DeleteObjectsCommand,
+  GetBucketPolicyCommand,
   GetObjectCommand,
   HeadBucketCommand,
   ListObjectsV2Command,
+  PutBucketPolicyCommand,
   PutObjectCommand,
   PutPublicAccessBlockCommand,
 } from "@aws-sdk/client-s3";
@@ -393,4 +395,123 @@ export async function s3DeploymentManifestExists(
   resourceId: string,
 ): Promise<boolean> {
   return (await readDeploymentManifest(stage, spec, resourceId)) !== null;
+}
+
+
+interface BucketPolicyDocument {
+  Version?: string;
+  Statement?: Array<Record<string, unknown>>;
+}
+
+function cloudFrontPolicySid(resourceId: string): string {
+  return `GateHouseCloudFront${resourceId.replace(/[^A-Za-z0-9]/g, "")}`;
+}
+
+async function readBucketPolicy(
+  stage: ManagedStage,
+  spec: S3BucketSpec,
+): Promise<BucketPolicyDocument> {
+  const s3 = bucketClient(stage, spec);
+
+  try {
+    const result = await s3.send(
+      new GetBucketPolicyCommand({
+        Bucket: spec.bucket,
+      }),
+    );
+
+    return result.Policy
+      ? (JSON.parse(result.Policy) as BucketPolicyDocument)
+      : {};
+  } catch (cause) {
+    const name =
+      cause && typeof cause === "object" && "name" in cause
+        ? String((cause as { name?: unknown }).name)
+        : "";
+
+    if (name === "NoSuchBucketPolicy") {
+      return {};
+    }
+
+    throw cause;
+  }
+}
+
+async function writeBucketPolicy(
+  stage: ManagedStage,
+  spec: S3BucketSpec,
+  policy: BucketPolicyDocument,
+): Promise<void> {
+  const s3 = bucketClient(stage, spec);
+
+  await s3.send(
+    new PutBucketPolicyCommand({
+      Bucket: spec.bucket,
+      Policy: JSON.stringify({
+        Version: policy.Version ?? "2012-10-17",
+        Statement: policy.Statement ?? [],
+      }),
+    }),
+  );
+}
+
+export async function grantCloudFrontReadAccess(
+  stage: ManagedStage,
+  spec: S3BucketSpec,
+  resourceId: string,
+  distributionId: string,
+  prefix?: string,
+): Promise<void> {
+  const policy = await readBucketPolicy(stage, spec);
+  const sid = cloudFrontPolicySid(resourceId);
+  const cleanedPrefix = prefix?.trim().replace(/^\/+|\/+$/g, "");
+  const resourceArn = cleanedPrefix
+    ? `arn:aws:s3:::${spec.bucket}/${cleanedPrefix}/*`
+    : `arn:aws:s3:::${spec.bucket}/*`;
+
+  const statements = (policy.Statement ?? []).filter(
+    (statement) => statement.Sid !== sid,
+  );
+
+  statements.push({
+    Sid: sid,
+    Effect: "Allow",
+    Principal: {
+      Service: "cloudfront.amazonaws.com",
+    },
+    Action: "s3:GetObject",
+    Resource: resourceArn,
+    Condition: {
+      StringEquals: {
+        "AWS:SourceArn":
+          `arn:aws:cloudfront::${stage.accountId}:distribution/${distributionId}`,
+      },
+    },
+  });
+
+  await writeBucketPolicy(stage, spec, {
+    ...policy,
+    Statement: statements,
+  });
+}
+
+export async function removeCloudFrontReadAccess(
+  stage: ManagedStage,
+  spec: S3BucketSpec,
+  resourceId: string,
+): Promise<void> {
+  const policy = await readBucketPolicy(stage, spec);
+  const sid = cloudFrontPolicySid(resourceId);
+  const statements = (policy.Statement ?? []).filter(
+    (statement) => statement.Sid !== sid,
+  );
+
+  if (statements.length === (policy.Statement ?? []).length) {
+    return;
+  }
+
+  await writeBucketPolicy(stage, spec, {
+    ...policy,
+    Statement: statements,
+  });
 }
