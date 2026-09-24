@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   attachResourceToStage,
+  getManagedStageById,
   listManagedProjects,
   listResources,
   type StoredResourceKind
@@ -246,30 +247,79 @@ export const actions: Actions = {
         }
       };
     } else if (params.section === 'storage') {
-      const storagePath = text(form, 'path');
+      const storageProvider = text(form, 'storageProvider') || 'local';
 
-      if (!storagePath) {
-        return fail(400, { error: 'Storage path is required.' });
-      }
+      if (storageProvider === 'local') {
+        const storagePath = text(form, 'path');
 
-      resource = {
-        id: crypto.randomUUID(),
-        kind: 'storage_bucket',
-        name,
-        provider: 'filesystem',
-        version: 1,
-        enabled: true,
-        status: 'pending',
-        createdAt: now,
-        updatedAt: now,
-        metadata: {
-          managed: true
-        },
-        spec: {
-          provider: 'local',
-          path: storagePath
+        if (!storagePath) {
+          return fail(400, { error: 'Storage path is required.' });
         }
-      };
+
+        resource = {
+          id: crypto.randomUUID(),
+          kind: 'storage_bucket',
+          name,
+          provider: 'filesystem',
+          version: 1,
+          enabled: true,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          metadata: {
+            managed: true
+          },
+          spec: {
+            provider: 'local',
+            path: storagePath
+          }
+        };
+      } else if (storageProvider === 's3') {
+        stageId = text(form, 'stageId');
+        const bucket = text(form, 'bucket');
+        const selectedStage = stageId ? getManagedStageById(stageId) : null;
+        const region =
+          text(form, 'region') ||
+          selectedStage?.stage.primaryRegion ||
+          '';
+
+        if (!stageId || !selectedStage) {
+          return fail(400, {
+            error: 'A valid project stage is required for S3 storage.'
+          });
+        }
+
+        if (!bucket) {
+          return fail(400, { error: 'S3 bucket name is required.' });
+        }
+
+        if (!region) {
+          return fail(400, { error: 'S3 bucket region is required.' });
+        }
+
+        resource = {
+          id: crypto.randomUUID(),
+          kind: 'storage_bucket',
+          name,
+          provider: 's3',
+          version: 1,
+          enabled: true,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          metadata: {
+            managed: true
+          },
+          spec: {
+            provider: 's3',
+            bucket,
+            region,
+            public: form.get('public') === 'on'
+          }
+        };
+      } else {
+        return fail(400, { error: 'Unsupported storage provider.' });
+      }
     } else if (params.section === 'static-sites') {
       const buildDirectory = text(form, 'buildDirectory');
       const outputDirectory = text(form, 'outputDirectory');
