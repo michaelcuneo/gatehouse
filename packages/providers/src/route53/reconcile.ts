@@ -2,7 +2,6 @@ import type { Resource } from "@gatehouse/types";
 import type { ProviderContext } from "../types";
 
 import {
-  findRoute53Record,
   removeRoute53Record,
   route53RecordMatchesDesired,
   upsertRoute53Record,
@@ -32,7 +31,12 @@ export async function reconcileRoute53Resource(
   context: ProviderContext,
 ): Promise<void> {
   validateRoute53Resource(resource, context);
-  await upsertRoute53Record(dnsRecord(resource), stage(context));
+
+  await upsertRoute53Record(
+    dnsRecord(resource),
+    stage(context),
+    context,
+  );
 }
 
 export async function destroyRoute53Resource(
@@ -40,7 +44,12 @@ export async function destroyRoute53Resource(
   context: ProviderContext,
 ): Promise<void> {
   validateRoute53Resource(resource, context);
-  await removeRoute53Record(dnsRecord(resource), stage(context));
+
+  await removeRoute53Record(
+    dnsRecord(resource),
+    stage(context),
+    context,
+  );
 }
 
 export async function healthRoute53Resource(
@@ -49,21 +58,15 @@ export async function healthRoute53Resource(
 ) {
   validateRoute53Resource(resource, context);
 
-  const record = dnsRecord(resource);
-  const existing = await findRoute53Record(record, stage(context));
-
-  if (!existing) {
-    return {
-      healthy: false,
-      message: "Route53 record does not exist",
-    };
-  }
-
-  const matches = route53RecordMatchesDesired(existing, record);
+  const healthy = await route53RecordMatchesDesired(
+    dnsRecord(resource),
+    stage(context),
+    context,
+  );
 
   return {
-    healthy: matches,
-    message: matches
+    healthy,
+    message: healthy
       ? "Route53 record matches desired state"
       : "Route53 record differs from desired state",
   };
