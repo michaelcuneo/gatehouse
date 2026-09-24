@@ -184,10 +184,17 @@ export function updateResourceState(
   const resource = getResource(id);
   if (!resource) return null;
 
+  const enabledChanged =
+    patch.enabled !== undefined &&
+    patch.enabled !== resource.enabled;
+
   return saveResource({
     ...resource,
     status: patch.status ?? resource.status,
     enabled: patch.enabled ?? resource.enabled,
+    version: enabledChanged
+      ? resource.version + 1
+      : resource.version,
     runtime:
       patch.runtime === undefined
         ? resource.runtime
