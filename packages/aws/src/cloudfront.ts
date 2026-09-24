@@ -2,8 +2,6 @@ import {
   CreateDistributionCommand,
   CreateInvalidationCommand,
   CreateOriginAccessControlCommand,
-  DeleteOriginAccessControlCommand,
-  DeleteDistributionCommand,
   GetDistributionCommand,
   GetDistributionConfigCommand,
   ListDistributionsCommand,
@@ -80,39 +78,6 @@ async function ensureOriginAccessControl(
   const existing = await findOriginAccessControl(stage, resourceId);
 
   if (existing) {
-    if (!spec.distributionId && !existing.enabled) {
-      const cloudFront = awsClientsForStage(stage).cloudFront;
-      const current = await cloudFront.send(
-        new GetDistributionConfigCommand({
-          Id: existing.id,
-        }),
-      );
-
-      if (!current.DistributionConfig || !current.ETag) {
-        throw new Error(
-          `CloudFront distribution "${existing.id}" has no editable configuration`,
-        );
-      }
-
-      const updated = await cloudFront.send(
-        new UpdateDistributionCommand({
-          Id: existing.id,
-          IfMatch: current.ETag,
-          DistributionConfig: {
-            ...current.DistributionConfig,
-            Enabled: true,
-          },
-        }),
-      );
-
-      return {
-        id: existing.id,
-        domainName: updated.Distribution?.DomainName ?? existing.domainName,
-        status: updated.Distribution?.Status ?? existing.status,
-        enabled: true,
-      };
-    }
-
     return existing;
   }
 
@@ -228,6 +193,39 @@ export async function ensureGateHouseDistribution(
   const existing = await findGateHouseDistribution(stage, spec);
 
   if (existing) {
+    if (!spec.distributionId && !existing.enabled) {
+      const cloudFront = awsClientsForStage(stage).cloudFront;
+      const current = await cloudFront.send(
+        new GetDistributionConfigCommand({
+          Id: existing.id,
+        }),
+      );
+
+      if (!current.DistributionConfig || !current.ETag) {
+        throw new Error(
+          `CloudFront distribution "${existing.id}" has no editable configuration`,
+        );
+      }
+
+      const updated = await cloudFront.send(
+        new UpdateDistributionCommand({
+          Id: existing.id,
+          IfMatch: current.ETag,
+          DistributionConfig: {
+            ...current.DistributionConfig,
+            Enabled: true,
+          },
+        }),
+      );
+
+      return {
+        id: existing.id,
+        domainName: updated.Distribution?.DomainName ?? existing.domainName,
+        status: updated.Distribution?.Status ?? existing.status,
+        enabled: true,
+      };
+    }
+
     return existing;
   }
 
@@ -339,97 +337,6 @@ export async function invalidateCloudFrontDistribution(
     }),
   );
 }
-
-export async function disableAndDeleteGateHouseDistribution(
-  stage: ManagedStage,
-  spec: CloudFrontStaticSiteSpec,
-): Promise<void> {
-  if (spec.distributionId) {
-    return;
-  }
-
-  const existing = await findGateHouseDistribution(stage, spec);
-
-  if (!existing) {
-    return;
-  }
-
-  const cloudFront = awsClientsForStage(stage).cloudFront;
-
-  const current = await cloudFront.send(
-    new GetDistributionConfigCommand({
-      Id: existing.id,
-    }),
-  );
-
-  if (!current.DistributionConfig || !current.ETag) {
-    throw new Error(
-      `CloudFront distribution "${existing.id}" has no editable configuration`,
-    );
-  }
-
-  let etag = current.ETag;
-
-  if (current.DistributionConfig.Enabled) {
-    const disabled = await cloudFront.send(
-      new UpdateDistributionCommand({
-        Id: existing.id,
-        IfMatch: etag,
-        DistributionConfig: {
-          ...current.DistributionConfig,
-          Enabled: false,
-        },
-      }),
-    );
-
-    etag = disabled.ETag ?? etag;
-  }
-
-  const latest = await cloudFront.send(
-    new GetDistributionCommand({
-      Id: existing.id,
-    }),
-  );
-
-  if (latest.Distribution?.Status !== "Deployed") {
-    throw new Error(
-      `CloudFront distribution "${existing.id}" is still deploying; disable has been requested but deletion must wait until it reaches Deployed`,
-    );
-  }
-
-  const latestConfig = await cloudFront.send(
-    new GetDistributionConfigCommand({
-      Id: existing.id,
-    }),
-  );
-
-  if (!latestConfig.ETag) {
-    throw new Error(
-      `CloudFront distribution "${existing.id}" has no current ETag`,
-    );
-  }
-
-  await cloudFront.send(
-    new DeleteDistributionCommand({
-      Id: existing.id,
-      IfMatch: latestConfig.ETag,
-    }),
-  );
-
-  const originAccessControlId = await findOriginAccessControl(
-    stage,
-    spec.resourceId,
-  );
-
-  if (originAccessControlId) {
-    await cloudFront.send(
-      new DeleteOriginAccessControlCommand({
-        Id: originAccessControlId,
-      }),
-    );
-  }
-}
-
 
 export async function disableGateHouseDistribution(
   stage: ManagedStage,
