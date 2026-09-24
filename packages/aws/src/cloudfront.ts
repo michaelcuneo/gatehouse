@@ -80,6 +80,39 @@ async function ensureOriginAccessControl(
   const existing = await findOriginAccessControl(stage, resourceId);
 
   if (existing) {
+    if (!spec.distributionId && !existing.enabled) {
+      const cloudFront = awsClientsForStage(stage).cloudFront;
+      const current = await cloudFront.send(
+        new GetDistributionConfigCommand({
+          Id: existing.id,
+        }),
+      );
+
+      if (!current.DistributionConfig || !current.ETag) {
+        throw new Error(
+          `CloudFront distribution "${existing.id}" has no editable configuration`,
+        );
+      }
+
+      const updated = await cloudFront.send(
+        new UpdateDistributionCommand({
+          Id: existing.id,
+          IfMatch: current.ETag,
+          DistributionConfig: {
+            ...current.DistributionConfig,
+            Enabled: true,
+          },
+        }),
+      );
+
+      return {
+        id: existing.id,
+        domainName: updated.Distribution?.DomainName ?? existing.domainName,
+        status: updated.Distribution?.Status ?? existing.status,
+        enabled: true,
+      };
+    }
+
     return existing;
   }
 
@@ -395,4 +428,44 @@ export async function disableAndDeleteGateHouseDistribution(
       }),
     );
   }
+}
+
+
+export async function disableGateHouseDistribution(
+  stage: ManagedStage,
+  spec: CloudFrontStaticSiteSpec,
+): Promise<void> {
+  if (spec.distributionId) {
+    return;
+  }
+
+  const existing = await findGateHouseDistribution(stage, spec);
+
+  if (!existing || !existing.enabled) {
+    return;
+  }
+
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+  const current = await cloudFront.send(
+    new GetDistributionConfigCommand({
+      Id: existing.id,
+    }),
+  );
+
+  if (!current.DistributionConfig || !current.ETag) {
+    throw new Error(
+      `CloudFront distribution "${existing.id}" has no editable configuration`,
+    );
+  }
+
+  await cloudFront.send(
+    new UpdateDistributionCommand({
+      Id: existing.id,
+      IfMatch: current.ETag,
+      DistributionConfig: {
+        ...current.DistributionConfig,
+        Enabled: false,
+      },
+    }),
+  );
 }
