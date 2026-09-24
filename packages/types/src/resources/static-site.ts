@@ -1,6 +1,18 @@
 import type { BaseResource } from "../core/resource";
 import type { ResourceId } from "../core/common";
 
+export interface StaticSiteCloudFrontSpec {
+  enabled: boolean;
+
+  /**
+   * Optional existing distribution to adopt for invalidation/health only.
+   * When omitted, GateHouse owns the distribution lifecycle.
+   */
+  distributionId?: string;
+
+  defaultRootObject?: string;
+}
+
 export interface StaticSiteSpec {
   buildDirectory: string;
 
@@ -18,6 +30,8 @@ export interface StaticSiteSpec {
    * Optional object-key prefix for S3 deployments.
    */
   prefix?: string;
+
+  cloudFront?: StaticSiteCloudFrontSpec;
 
   deployOnChange?: boolean;
 }
