@@ -225,13 +225,14 @@ export async function upsertRoute53RecordInBestZone(
 
 const CLOUDFRONT_HOSTED_ZONE_ID = "Z2FDTNDATAQYW2";
 
-async function findRecordInBestZone(
+async function findAliasRecord(
   stage: ManagedStage,
+  zone: string,
   name: string,
   type: "A" | "AAAA",
 ): Promise<ResourceRecordSet | null> {
   const { route53 } = awsClientsForStage(stage);
-  const HostedZoneId = await bestHostedZoneId(stage, name);
+  const HostedZoneId = await hostedZoneId(stage, zone);
 
   const result = await route53.send(
     new ListResourceRecordSetsCommand({
@@ -284,15 +285,17 @@ function aliasPointsToCloudFront(
 
 export async function ensureRoute53CloudFrontAliases(
   stage: ManagedStage,
+  zone: string,
   hostname: string,
   distributionDomain: string,
 ): Promise<void> {
   const { route53 } = awsClientsForStage(stage);
-  const HostedZoneId = await bestHostedZoneId(stage, hostname);
+  const HostedZoneId = await hostedZoneId(stage, zone);
 
   for (const type of ["A", "AAAA"] as const) {
-    const existing = await findRecordInBestZone(
+    const existing = await findAliasRecord(
       stage,
+      zone,
       hostname,
       type,
     );
@@ -326,15 +329,17 @@ export async function ensureRoute53CloudFrontAliases(
 
 export async function removeRoute53CloudFrontAliases(
   stage: ManagedStage,
+  zone: string,
   hostname: string,
   distributionDomain: string,
 ): Promise<void> {
   const { route53 } = awsClientsForStage(stage);
-  const HostedZoneId = await bestHostedZoneId(stage, hostname);
+  const HostedZoneId = await hostedZoneId(stage, zone);
 
   for (const type of ["A", "AAAA"] as const) {
-    const existing = await findRecordInBestZone(
+    const existing = await findAliasRecord(
       stage,
+      zone,
       hostname,
       type,
     );
@@ -366,12 +371,13 @@ export async function removeRoute53CloudFrontAliases(
 
 export async function route53CloudFrontAliasesHealthy(
   stage: ManagedStage,
+  zone: string,
   hostname: string,
   distributionDomain: string,
 ): Promise<boolean> {
   const records = await Promise.all(
     (["A", "AAAA"] as const).map((type) =>
-      findRecordInBestZone(stage, hostname, type),
+      findAliasRecord(stage, zone, hostname, type),
     ),
   );
 
