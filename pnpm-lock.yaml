@@ -113,8 +113,6 @@ importers:
         version: 3.1138.0
       '@aws-sdk/client-lambda':
         specifier: ^3.0.0
-      '@aws-sdk/client-route-53':
-        specifier: ^3.0.0
         version: 3.1138.0
       '@aws-sdk/client-sts':
         specifier: ^3.0.0
