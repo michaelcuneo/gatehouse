@@ -23,7 +23,10 @@ import type {
   StaticSiteResource,
   StorageBucketResource,
 } from "@gatehouse/types";
-import type { ProviderContext } from "../types";
+import type {
+  ProviderContext,
+  ProviderReconcileResult,
+} from "../types";
 
 function resolveBuildDirectory(value: string): string {
   return path.isAbsolute(value)
@@ -390,11 +393,10 @@ async function deploymentObjects(
 export async function reconcileS3StaticSite(
   resource: StaticSiteResource,
   context: ProviderContext,
-): Promise<void> {
+): Promise<ProviderReconcileResult> {
   const storage = storageDependency(resource, context);
   const targetStage = stage(context);
   const targetBucket = bucketSpec(storage);
-  const objects = await deploymentObjects(resource);
 
   if (resource.spec.cloudFront?.enabled) {
     const distribution = await ensureGateHouseDistribution(
@@ -410,6 +412,23 @@ export async function reconcileS3StaticSite(
       resource.spec.prefix,
     );
   }
+
+  if (context.deployment?.skipArtifactTransfer) {
+    const manifestExists = await s3DeploymentManifestExists(
+      targetStage,
+      targetBucket,
+      resource.id,
+    );
+
+    if (manifestExists) {
+      return {
+        artifactTransferred: false,
+        message: "Build artifact unchanged; existing S3 deployment retained",
+      };
+    }
+  }
+
+  const objects = await deploymentObjects(resource);
 
   await syncS3Deployment(
     targetStage,
@@ -434,6 +453,13 @@ export async function reconcileS3StaticSite(
       resource.id,
     );
   }
+
+  return {
+    artifactTransferred: true,
+    message: context.deployment?.skipArtifactTransfer
+      ? "S3 deployment manifest was missing and has been restored"
+      : "Static-site build synchronized to S3",
+  };
 }
 
 export async function destroyS3StaticSite(
