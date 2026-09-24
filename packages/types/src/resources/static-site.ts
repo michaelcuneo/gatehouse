@@ -11,6 +11,10 @@ export interface StaticSiteCloudFrontSpec {
   distributionId?: string;
 
   defaultRootObject?: string;
+
+  aliases?: string[];
+
+  certificateId?: ResourceId;
 }
 
 export interface StaticSiteSpec {
