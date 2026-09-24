@@ -14,4 +14,5 @@ export const s3Provider: Provider = {
 };
 
 export * from "./validate";
+export * from "./staticSite";
 export * from "./reconcile";
