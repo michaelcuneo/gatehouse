@@ -11,6 +11,10 @@ function dependencyIds(resource: Resource): string[] {
     if (resource.spec.storageId) {
       dependencies.add(resource.spec.storageId);
     }
+
+    if (resource.spec.cloudFront?.certificateId) {
+      dependencies.add(resource.spec.cloudFront.certificateId);
+    }
   }
 
   return [...dependencies];
