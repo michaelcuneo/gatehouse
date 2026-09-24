@@ -131,7 +131,58 @@ export const actions: Actions = {
 
     let stageId: string | undefined;
 
-    if (params.section === 'dns') {
+    if (params.section === 'certificates') {
+      stageId = text(form, 'stageId');
+      const domains = text(form, 'domains')
+        .split(',')
+        .map((domain) => domain.trim())
+        .filter(Boolean);
+      const region = text(form, 'region') || 'us-east-1';
+      const validation = text(form, 'validation') || 'dns';
+      const certificateArn = text(form, 'certificateArn');
+
+      if (!stageId || !getManagedStageById(stageId)) {
+        return fail(400, {
+          error: 'A valid project stage is required for ACM certificates.'
+        });
+      }
+
+      if (!domains.length) {
+        return fail(400, {
+          error: 'At least one certificate domain is required.'
+        });
+      }
+
+      if (validation !== 'dns' && validation !== 'email') {
+        return fail(400, {
+          error: 'Certificate validation must be DNS or email.'
+        });
+      }
+
+      resource = {
+        id: crypto.randomUUID(),
+        kind: 'certificate',
+        name,
+        provider: 'acm',
+        version: 1,
+        enabled: true,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          managed: !certificateArn
+        },
+        spec: {
+          provider: 'aws_acm',
+          domains,
+          wildcard: form.get('wildcard') === 'on',
+          autoRenew: true,
+          region,
+          certificateArn: certificateArn || undefined,
+          validation
+        }
+      };
+    } else if (params.section === 'dns') {
       const zone = text(form, 'zone');
       const recordName = text(form, 'recordName');
       const recordType = dnsRecordType(text(form, 'recordType'));
