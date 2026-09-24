@@ -66,13 +66,15 @@
     {/if}
   </section>
 
-  {#if data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
+  {#if data.section.kind === 'certificate' || data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
     <div class="section-head">
       <div>
         <span class="eyebrow">Desired state</span>
         <h2>
-          {data.section.kind === 'dns_record'
-            ? 'Create Route53 record'
+          {data.section.kind === 'certificate'
+            ? 'Create ACM certificate'
+            : data.section.kind === 'dns_record'
+              ? 'Create Route53 record'
             : data.section.kind === 'service'
               ? 'Create managed service'
               : data.section.kind === 'storage_bucket'
@@ -94,7 +96,61 @@
             <input id="name" name="name" required />
           </div>
 
-          {#if data.section.kind === 'dns_record'}
+          {#if data.section.kind === 'certificate'}
+            <div class="field">
+              <label for="stageId">Project stage</label>
+              <select id="stageId" name="stageId" required>
+                <option value="">Select target stage</option>
+                {#each data.projectStages as stage}
+                  <option value={stage.stageId}>
+                    {stage.label} · {stage.accountId} · {stage.region}
+                  </option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="domains">Domains</label>
+              <input
+                id="domains"
+                name="domains"
+                placeholder="example.com, www.example.com"
+                required
+              />
+            </div>
+
+            <label class="check-field">
+              <input name="wildcard" type="checkbox" />
+              Include wildcard for the primary domain
+            </label>
+
+            <div class="field">
+              <label for="region">ACM region</label>
+              <input
+                id="region"
+                name="region"
+                value="us-east-1"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="validation">Validation</label>
+              <select id="validation" name="validation">
+                <option value="dns">Route53 DNS</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="certificateArn">Existing certificate ARN</label>
+              <input
+                id="certificateArn"
+                name="certificateArn"
+                placeholder="Leave blank for GateHouse-managed ACM"
+              />
+            </div>
+          {:else if data.section.kind === 'dns_record'}
             <div class="field">
               <label for="stageId">Project stage</label>
               <select id="stageId" name="stageId" required>
@@ -417,8 +473,10 @@
 
         <div class="actions">
           <button class="button" type="submit">
-            {data.section.kind === 'dns_record'
-              ? 'Create DNS record'
+            {data.section.kind === 'certificate'
+              ? 'Create ACM certificate'
+              : data.section.kind === 'dns_record'
+                ? 'Create DNS record'
               : data.section.kind === 'service'
                 ? 'Create service'
                 : data.section.kind === 'storage_bucket'
