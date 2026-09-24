@@ -6,7 +6,10 @@ import {
   s3BucketExists,
 } from "@gatehouse/aws";
 import type { Resource } from "@gatehouse/types";
-import type { ProviderContext } from "../types";
+import type {
+  ProviderContext,
+  ProviderReconcileResult,
+} from "../types";
 
 import {
   destroyS3StaticSite,
@@ -46,11 +49,10 @@ function storageTarget(resource: Resource, context: ProviderContext) {
 export async function reconcileS3Resource(
   resource: Resource,
   context: ProviderContext,
-): Promise<void> {
+): Promise<ProviderReconcileResult | void> {
   if (resource.kind === "static_site") {
     validateS3StaticSite(resource, context);
-    await reconcileS3StaticSite(resource, context);
-    return;
+    return reconcileS3StaticSite(resource, context);
   }
 
   const resolved = storageTarget(resource, context);
