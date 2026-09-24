@@ -461,6 +461,25 @@
                     value="index.html"
                   />
                 </div>
+
+                <div class="field">
+                  <label for="aliases">Custom hostnames</label>
+                  <input
+                    id="aliases"
+                    name="aliases"
+                    placeholder="www.example.com, example.com"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="certificateId">ACM certificate</label>
+                  <select id="certificateId" name="certificateId">
+                    <option value="">None</option>
+                    {#each data.certificates.filter((certificate) => certificate.provider === 'acm') as certificate}
+                      <option value={certificate.id}>{certificate.name}</option>
+                    {/each}
+                  </select>
+                </div>
               {/if}
             {/if}
 
