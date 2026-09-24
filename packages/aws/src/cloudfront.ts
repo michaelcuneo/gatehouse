@@ -20,6 +20,8 @@ export interface CloudFrontStaticSiteSpec {
   prefix?: string;
   distributionId?: string;
   defaultRootObject?: string;
+  aliases?: string[];
+  certificateArn?: string;
 }
 
 export interface CloudFrontDistributionState {
@@ -117,6 +119,45 @@ function originPath(prefix?: string): string {
   return cleaned ? `/${cleaned}` : "";
 }
 
+function normalizedAliases(aliases?: string[]): string[] {
+  return [...new Set(
+    (aliases ?? [])
+      .map((alias) => alias.trim().toLowerCase())
+      .filter(Boolean),
+  )].sort();
+}
+
+function desiredViewerCertificate(spec: CloudFrontStaticSiteSpec) {
+  const aliases = normalizedAliases(spec.aliases);
+
+  if (!aliases.length) {
+    return {
+      CloudFrontDefaultCertificate: true,
+    };
+  }
+
+  if (!spec.certificateArn) {
+    throw new Error(
+      "CloudFront aliases require an ACM certificate ARN",
+    );
+  }
+
+  return {
+    ACMCertificateArn: spec.certificateArn,
+    SSLSupportMethod: "sni-only" as const,
+    MinimumProtocolVersion: "TLSv1.2_2021" as const,
+  };
+}
+
+function desiredAliases(spec: CloudFrontStaticSiteSpec) {
+  const aliases = normalizedAliases(spec.aliases);
+
+  return {
+    Quantity: aliases.length,
+    Items: aliases.length ? aliases : undefined,
+  };
+}
+
 export async function findGateHouseDistribution(
   stage: ManagedStage,
   spec: CloudFrontStaticSiteSpec,
@@ -193,40 +234,71 @@ export async function ensureGateHouseDistribution(
   const existing = await findGateHouseDistribution(stage, spec);
 
   if (existing) {
-    if (!spec.distributionId && !existing.enabled) {
-      const cloudFront = awsClientsForStage(stage).cloudFront;
-      const current = await cloudFront.send(
-        new GetDistributionConfigCommand({
-          Id: existing.id,
-        }),
-      );
-
-      if (!current.DistributionConfig || !current.ETag) {
-        throw new Error(
-          `CloudFront distribution "${existing.id}" has no editable configuration`,
-        );
-      }
-
-      const updated = await cloudFront.send(
-        new UpdateDistributionCommand({
-          Id: existing.id,
-          IfMatch: current.ETag,
-          DistributionConfig: {
-            ...current.DistributionConfig,
-            Enabled: true,
-          },
-        }),
-      );
-
-      return {
-        id: existing.id,
-        domainName: updated.Distribution?.DomainName ?? existing.domainName,
-        status: updated.Distribution?.Status ?? existing.status,
-        enabled: true,
-      };
+    if (spec.distributionId) {
+      return existing;
     }
 
-    return existing;
+    const cloudFront = awsClientsForStage(stage).cloudFront;
+    const current = await cloudFront.send(
+      new GetDistributionConfigCommand({
+        Id: existing.id,
+      }),
+    );
+
+    if (!current.DistributionConfig || !current.ETag) {
+      throw new Error(
+        `CloudFront distribution "${existing.id}" has no editable configuration`,
+      );
+    }
+
+    const originAccessControlId = await ensureOriginAccessControl(
+      stage,
+      spec.resourceId,
+    );
+
+    const origins = current.DistributionConfig.Origins.Items?.map((origin) =>
+      origin.Id === originId(spec.resourceId)
+        ? {
+            ...origin,
+            DomainName: s3OriginDomain(
+              spec.bucket,
+              spec.bucketRegion,
+            ),
+            OriginPath: originPath(spec.prefix),
+            OriginAccessControlId: originAccessControlId,
+            S3OriginConfig: {
+              OriginAccessIdentity: "",
+            },
+          }
+        : origin,
+    );
+
+    const nextConfig = {
+      ...current.DistributionConfig,
+      Enabled: true,
+      DefaultRootObject: spec.defaultRootObject ?? "index.html",
+      Aliases: desiredAliases(spec),
+      ViewerCertificate: desiredViewerCertificate(spec),
+      Origins: {
+        ...current.DistributionConfig.Origins,
+        Items: origins,
+      },
+    };
+
+    const updated = await cloudFront.send(
+      new UpdateDistributionCommand({
+        Id: existing.id,
+        IfMatch: current.ETag,
+        DistributionConfig: nextConfig,
+      }),
+    );
+
+    return {
+      id: existing.id,
+      domainName: updated.Distribution?.DomainName ?? existing.domainName,
+      status: updated.Distribution?.Status ?? existing.status,
+      enabled: true,
+    };
   }
 
   if (spec.distributionId) {
@@ -288,9 +360,8 @@ export async function ensureGateHouseDistribution(
           MaxTTL: 31536000,
         },
         PriceClass: "PriceClass_100",
-        ViewerCertificate: {
-          CloudFrontDefaultCertificate: true,
-        },
+        Aliases: desiredAliases(spec),
+        ViewerCertificate: desiredViewerCertificate(spec),
         HttpVersion: "http2",
         IsIPV6Enabled: true,
         Restrictions: {
