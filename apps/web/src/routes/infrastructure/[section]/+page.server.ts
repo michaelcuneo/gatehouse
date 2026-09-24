@@ -99,6 +99,7 @@ export const load: PageServerLoad = async ({ params }) => {
     endpoints: listResources('endpoint'),
     storage: listResources('storage_bucket'),
     certificates: listResources('certificate'),
+    staticSites: listResources('static_site'),
     projectStages: listManagedProjects().flatMap((project) =>
       project.stages
         .filter((stage) => stage.enabled)
@@ -186,50 +187,111 @@ export const actions: Actions = {
     } else if (params.section === 'dns') {
       const zone = text(form, 'zone');
       const recordName = text(form, 'recordName');
-      const recordType = dnsRecordType(text(form, 'recordType'));
-      const value = text(form, 'value');
-      const ttl = Number(text(form, 'ttl') || 300);
+      const dnsMode = text(form, 'dnsMode') || 'value';
       stageId = text(form, 'stageId');
 
-      if (!stageId) {
+      if (!stageId || !getManagedStageById(stageId)) {
         return fail(400, {
-          error: 'A project stage is required for Route53 resources.'
+          error: 'A valid project stage is required for Route53 resources.'
         });
       }
 
-      if (!zone || !recordName || !recordType || !value) {
+      if (!zone || !recordName) {
         return fail(400, {
-          error: 'Hosted zone, record name, type and value are required.'
+          error: 'Hosted zone and record name are required.'
         });
       }
 
-      if (!Number.isInteger(ttl) || ttl < 1 || ttl > 2147483647) {
-        return fail(400, {
-          error: 'TTL must be a positive integer.'
-        });
-      }
+      if (dnsMode === 'cloudfront_alias') {
+        const staticSiteId = text(form, 'staticSiteId');
+        const staticSite = staticSiteId
+          ? getResource(staticSiteId)
+          : null;
 
-      resource = {
-        id: crypto.randomUUID(),
-        kind: 'dns_record',
-        name,
-        provider: 'route53',
-        version: 1,
-        enabled: true,
-        status: 'pending',
-        createdAt: now,
-        updatedAt: now,
-        metadata: {
-          managed: true
-        },
-        spec: {
-          zone,
-          name: recordName,
-          type: recordType,
-          value,
-          ttl
+        if (!staticSite || staticSite.kind !== 'static_site') {
+          return fail(400, {
+            error: 'A valid static site is required for a CloudFront alias.'
+          });
         }
-      };
+
+        if (!staticSite.spec.cloudFront?.enabled) {
+          return fail(400, {
+            error: 'The selected static site does not have CloudFront enabled.'
+          });
+        }
+
+        const staticSiteStageIds =
+          listStageIdsForResource(staticSiteId);
+
+        if (
+          staticSiteStageIds.length !== 1 ||
+          staticSiteStageIds[0] !== stageId
+        ) {
+          return fail(400, {
+            error: 'The CloudFront alias and static site must belong to the same project stage.'
+          });
+        }
+
+        resource = {
+          id: crypto.randomUUID(),
+          kind: 'dns_record',
+          name,
+          provider: 'route53',
+          version: 1,
+          enabled: true,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          metadata: {
+            managed: true
+          },
+          spec: {
+            mode: 'cloudfront_alias',
+            zone,
+            name: recordName,
+            staticSiteId
+          }
+        };
+      } else {
+        const recordType = dnsRecordType(text(form, 'recordType'));
+        const value = text(form, 'value');
+        const ttl = Number(text(form, 'ttl') || 300);
+
+        if (!recordType || !value) {
+          return fail(400, {
+            error: 'Record type and value are required.'
+          });
+        }
+
+        if (!Number.isInteger(ttl) || ttl < 1 || ttl > 2147483647) {
+          return fail(400, {
+            error: 'TTL must be a positive integer.'
+          });
+        }
+
+        resource = {
+          id: crypto.randomUUID(),
+          kind: 'dns_record',
+          name,
+          provider: 'route53',
+          version: 1,
+          enabled: true,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+          metadata: {
+            managed: true
+          },
+          spec: {
+            mode: 'value',
+            zone,
+            name: recordName,
+            type: recordType,
+            value,
+            ttl
+          }
+        };
+      }
     } else if (params.section === 'services') {
       const runtime = serviceRuntime(text(form, 'runtime'));
       const workingDirectory = text(form, 'workingDirectory');
