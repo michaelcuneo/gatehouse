@@ -2,6 +2,7 @@ import {
   DeleteCertificateCommand,
   DescribeCertificateCommand,
   ListCertificatesCommand,
+  ListTagsForCertificateCommand,
   RequestCertificateCommand,
   type CertificateDetail,
 } from "@aws-sdk/client-acm";
@@ -124,15 +125,27 @@ async function findManagedCertificateArn(
       if (!summary.CertificateArn) continue;
       if ((summary.DomainName ?? "").toLowerCase() !== primary) continue;
 
+      const tags = await acm.send(
+        new ListTagsForCertificateCommand({
+          CertificateArn: summary.CertificateArn,
+        }),
+      );
+
+      const managed = (tags.Tags ?? []).some(
+        (tag) =>
+          tag.Key === "GateHouseResource" &&
+          tag.Value === managedTagValue(spec.resourceId),
+      );
+
+      if (!managed) continue;
+
       const detail = await describeCertificate(
         stage,
         spec.region,
         summary.CertificateArn,
       );
 
-      const tag = detail?.Options?.CertificateTransparencyLoggingPreference;
-
-      if (detail?.CertificateArn && tag === "ENABLED") {
+      if (detail?.CertificateArn) {
         const sans = new Set(
           (detail.SubjectAlternativeNames ?? [])
             .map((domain) => domain.toLowerCase()),
