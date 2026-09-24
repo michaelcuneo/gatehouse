@@ -1,5 +1,6 @@
 <script lang="ts">
   let { data, form } = $props();
+  let storageProvider = $state('local');
   const date = (value: string) => new Date(value).toLocaleString();
 </script>
 
@@ -73,7 +74,7 @@
             : data.section.kind === 'service'
               ? 'Create managed service'
               : data.section.kind === 'storage_bucket'
-                ? 'Create local storage'
+                ? 'Create storage'
                 : 'Create static deployment'}
         </h2>
       </div>
@@ -244,14 +245,64 @@
             </label>
           {:else if data.section.kind === 'storage_bucket'}
             <div class="field">
-              <label for="path">Local path</label>
-              <input
-                id="path"
-                name="path"
-                placeholder="/srv/gatehouse/storage"
-                required
-              />
+              <label for="storageProvider">Storage provider</label>
+              <select
+                id="storageProvider"
+                name="storageProvider"
+                bind:value={storageProvider}
+              >
+                <option value="local">Local filesystem</option>
+                <option value="s3">AWS S3</option>
+              </select>
             </div>
+
+            {#if storageProvider === 'local'}
+              <div class="field">
+                <label for="path">Local path</label>
+                <input
+                  id="path"
+                  name="path"
+                  placeholder="/srv/gatehouse/storage"
+                  required
+                />
+              </div>
+            {:else}
+              <div class="field">
+                <label for="stageId">Project stage</label>
+                <select id="stageId" name="stageId" required>
+                  <option value="">Select target stage</option>
+                  {#each data.projectStages as stage}
+                    <option value={stage.stageId}>
+                      {stage.label} · {stage.accountId} · {stage.region}
+                    </option>
+                  {/each}
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="bucket">Bucket name</label>
+                <input
+                  id="bucket"
+                  name="bucket"
+                  placeholder="my-gatehouse-bucket"
+                  required
+                />
+              </div>
+
+              <div class="field">
+                <label for="region">Region</label>
+                <input
+                  id="region"
+                  name="region"
+                  placeholder="Uses the selected stage region"
+                />
+              </div>
+
+              <label class="check-field">
+                <input name="public" type="checkbox" />
+                Allow public access configuration
+              </label>
+            {/if}
           {:else}
             <div class="field">
               <label for="buildDirectory">Build directory</label>
@@ -307,7 +358,9 @@
               : data.section.kind === 'service'
                 ? 'Create service'
                 : data.section.kind === 'storage_bucket'
-                  ? 'Create and reconcile'
+                  ? storageProvider === 's3'
+                    ? 'Create S3 bucket'
+                    : 'Create local storage'
                   : 'Deploy static site'}
           </button>
         </div>
