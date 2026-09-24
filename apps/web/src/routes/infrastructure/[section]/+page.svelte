@@ -1,6 +1,7 @@
 <script lang="ts">
   let { data, form } = $props();
   let storageProvider = $state('local');
+  let staticDeploymentTarget = $state('local');
   const date = (value: string) => new Date(value).toLocaleString();
 </script>
 
@@ -305,6 +306,18 @@
             {/if}
           {:else}
             <div class="field">
+              <label for="deploymentTarget">Deployment target</label>
+              <select
+                id="deploymentTarget"
+                name="deploymentTarget"
+                bind:value={staticDeploymentTarget}
+              >
+                <option value="local">Local filesystem</option>
+                <option value="s3">AWS S3</option>
+              </select>
+            </div>
+
+            <div class="field">
               <label for="buildDirectory">Build directory</label>
               <input
                 id="buildDirectory"
@@ -314,35 +327,56 @@
               />
             </div>
 
-            <div class="field">
-              <label for="outputDirectory">Deployment directory</label>
-              <input
-                id="outputDirectory"
-                name="outputDirectory"
-                placeholder="/srv/sites/example"
-                required
-              />
-            </div>
+            {#if staticDeploymentTarget === 'local'}
+              <div class="field">
+                <label for="outputDirectory">Deployment directory</label>
+                <input
+                  id="outputDirectory"
+                  name="outputDirectory"
+                  placeholder="/srv/sites/example"
+                  required
+                />
+              </div>
 
-            <div class="field">
-              <label for="endpointId">Endpoint dependency</label>
-              <select id="endpointId" name="endpointId">
-                <option value="">None</option>
-                {#each data.endpoints as endpoint}
-                  <option value={endpoint.id}>{endpoint.name}</option>
-                {/each}
-              </select>
-            </div>
+              <div class="field">
+                <label for="endpointId">Endpoint dependency</label>
+                <select id="endpointId" name="endpointId">
+                  <option value="">None</option>
+                  {#each data.endpoints as endpoint}
+                    <option value={endpoint.id}>{endpoint.name}</option>
+                  {/each}
+                </select>
+              </div>
 
-            <div class="field">
-              <label for="storageId">Storage dependency</label>
-              <select id="storageId" name="storageId">
-                <option value="">None</option>
-                {#each data.storage as storage}
-                  <option value={storage.id}>{storage.name}</option>
-                {/each}
-              </select>
-            </div>
+              <div class="field">
+                <label for="storageId">Local storage dependency</label>
+                <select id="storageId" name="storageId">
+                  <option value="">None</option>
+                  {#each data.storage.filter((storage) => storage.provider === 'filesystem') as storage}
+                    <option value={storage.id}>{storage.name}</option>
+                  {/each}
+                </select>
+              </div>
+            {:else}
+              <div class="field">
+                <label for="storageId">S3 storage resource</label>
+                <select id="storageId" name="storageId" required>
+                  <option value="">Select S3 bucket</option>
+                  {#each data.storage.filter((storage) => storage.provider === 's3') as storage}
+                    <option value={storage.id}>{storage.name}</option>
+                  {/each}
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="prefix">Object prefix</label>
+                <input
+                  id="prefix"
+                  name="prefix"
+                  placeholder="site/"
+                />
+              </div>
+            {/if}
 
             <label class="check-field">
               <input name="deployOnChange" type="checkbox" />
@@ -361,7 +395,9 @@
                   ? storageProvider === 's3'
                     ? 'Create S3 bucket'
                     : 'Create local storage'
-                  : 'Deploy static site'}
+                  : staticDeploymentTarget === 's3'
+                    ? 'Deploy to S3'
+                    : 'Deploy static site'}
           </button>
         </div>
       </form>
