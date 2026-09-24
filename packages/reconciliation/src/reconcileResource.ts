@@ -1,5 +1,6 @@
 import {
   finishDeployment,
+  getLatestSuccessfulDeployment,
   startDeployment,
   updateResourceState,
   writeAuditLog,
@@ -11,8 +12,13 @@ import {
 } from "@gatehouse/resources";
 import type { Resource } from "@gatehouse/types";
 
+import { fingerprintStaticSiteBuild } from "./artifactFingerprint";
 import { planReconciliation } from "./planReconciliation";
 import { providerContextForResource } from "./providerContext";
+
+export interface ReconcileResourceOptions {
+  forceDeployment?: boolean;
+}
 
 function isDeployableResource(
   resource: Resource,
@@ -20,7 +26,10 @@ function isDeployableResource(
   return resource.kind === "service" || resource.kind === "static_site";
 }
 
-async function applyResource(resource: Resource): Promise<void> {
+async function applyResource(
+  resource: Resource,
+  options: ReconcileResourceOptions = {},
+): Promise<void> {
   const provider = getProvider(resource.provider);
   const context = providerContextForResource(resource.id);
 
@@ -42,6 +51,8 @@ async function applyResource(resource: Resource): Promise<void> {
   });
 
   let deploymentId: string | null = null;
+  let artifactFingerprint: string | undefined;
+  let skipArtifactTransfer = false;
 
   try {
     if (resource.enabled && isDeployableResource(resource)) {
@@ -54,10 +65,28 @@ async function applyResource(resource: Resource): Promise<void> {
         startedAt,
         message: `Deploying with ${resource.provider}`,
       }).id;
+
+      if (resource.kind === "static_site") {
+        artifactFingerprint = await fingerprintStaticSiteBuild(resource);
+
+        const previous = getLatestSuccessfulDeployment(resource.id);
+
+        skipArtifactTransfer =
+          resource.spec.deployOnChange === true &&
+          options.forceDeployment !== true &&
+          previous?.artifactFingerprint === artifactFingerprint;
+
+        context.deployment = {
+          artifactFingerprint,
+          skipArtifactTransfer,
+        };
+      }
     }
 
+    let reconcileResult;
+
     if (resource.enabled) {
-      await provider.reconcile(resource, context);
+      reconcileResult = await provider.reconcile(resource, context);
     } else if (provider.destroy) {
       await provider.destroy(resource, context);
     }
@@ -65,10 +94,20 @@ async function applyResource(resource: Resource): Promise<void> {
     const completedAt = new Date().toISOString();
 
     if (deploymentId) {
+      const skipped =
+        resource.kind === "static_site" &&
+        skipArtifactTransfer &&
+        reconcileResult?.artifactTransferred === false;
+
       finishDeployment(deploymentId, {
-        status: "succeeded",
+        status: skipped ? "skipped" : "succeeded",
         completedAt,
-        message: `Deployment completed with ${resource.provider}`,
+        artifactFingerprint,
+        message:
+          reconcileResult?.message ??
+          (skipped
+            ? "Artifact unchanged; infrastructure reconciled without transfer"
+            : `Deployment completed with ${resource.provider}`),
       });
     }
 
@@ -101,6 +140,7 @@ async function applyResource(resource: Resource): Promise<void> {
       finishDeployment(deploymentId, {
         status: "failed",
         completedAt: failedAt,
+        artifactFingerprint,
         message,
       });
     }
@@ -127,7 +167,10 @@ async function applyResource(resource: Resource): Promise<void> {
   }
 }
 
-export async function reconcileResource(resourceId: string): Promise<void> {
+export async function reconcileResource(
+  resourceId: string,
+  options: ReconcileResourceOptions = {},
+): Promise<void> {
   const target = getResource(resourceId);
 
   if (!target) {
@@ -138,7 +181,11 @@ export async function reconcileResource(resourceId: string): Promise<void> {
   const plan = planReconciliation(resources, [resourceId]);
 
   for (const resource of plan) {
-    await applyResource(resource);
+    await applyResource(resource, {
+      forceDeployment:
+        options.forceDeployment === true &&
+        resource.id === resourceId,
+    });
   }
 }
 
