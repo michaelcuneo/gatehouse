@@ -4,7 +4,7 @@ import {
   reconcileDynamoDBTable,
 } from "@gatehouse/aws";
 import type {
-  DynamoDBTableResource,
+  DatabaseTableResource,
   Resource,
 } from "@gatehouse/types";
 import type { ProviderContext } from "../types";
@@ -15,12 +15,12 @@ function target(
   resource: Resource,
   context: ProviderContext,
 ): {
-  resource: DynamoDBTableResource;
+  resource: DatabaseTableResource;
   stage: ProviderContext["projectStages"][number]["stage"];
 } {
   validateDynamoDBResource(resource, context);
 
-  if (resource.kind !== "dynamodb_table") {
+  if (resource.kind !== "database_table") {
     throw new Error("DynamoDB provider requires a table resource");
   }
 
