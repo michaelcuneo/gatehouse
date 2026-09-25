@@ -415,6 +415,57 @@ export const actions: Actions = {
           break;
         }
 
+        case 'dynamodb_table': {
+          const billingMode = text(form, 'billingMode');
+          const readCapacity = integer(form, 'readCapacity', {
+            min: 1,
+            max: 1000000
+          });
+          const writeCapacity = integer(form, 'writeCapacity', {
+            min: 1,
+            max: 1000000
+          });
+
+          if (
+            billingMode !== 'PAY_PER_REQUEST' &&
+            billingMode !== 'PROVISIONED'
+          ) {
+            return fail(400, {
+              error: 'Unsupported DynamoDB billing mode.'
+            });
+          }
+
+          if (
+            billingMode === 'PROVISIONED' &&
+            (readCapacity === null || writeCapacity === null)
+          ) {
+            return fail(400, {
+              error: 'Provisioned DynamoDB tables require positive read and write capacity.'
+            });
+          }
+
+          updated = {
+            ...updated,
+            spec: {
+              ...resource.spec,
+              billingMode,
+              readCapacity:
+                billingMode === 'PROVISIONED'
+                  ? readCapacity ?? 1
+                  : undefined,
+              writeCapacity:
+                billingMode === 'PROVISIONED'
+                  ? writeCapacity ?? 1
+                  : undefined,
+              deletionProtection: checkbox(
+                form,
+                'deletionProtection'
+              )
+            }
+          } as Resource;
+          break;
+        }
+
         case 'static_site': {
           const buildDirectory = text(form, 'buildDirectory');
 
