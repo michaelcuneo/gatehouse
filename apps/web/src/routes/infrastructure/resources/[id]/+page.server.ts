@@ -219,7 +219,7 @@ export const actions: Actions = {
                 ssl: resource.spec.ssl,
                 redirectToHttps: checkbox(form, 'redirectToHttps')
               }
-            };
+            } as Resource;
           } else if (mode === 'static') {
             const root = text(form, 'root');
 
@@ -239,7 +239,7 @@ export const actions: Actions = {
                 ssl: resource.spec.ssl,
                 redirectToHttps: checkbox(form, 'redirectToHttps')
               }
-            };
+            } as Resource;
           } else {
             return fail(400, { error: 'Unsupported endpoint mode.' });
           }
@@ -311,7 +311,7 @@ export const actions: Actions = {
                   }
                 : undefined
             }
-          };
+          } as Resource;
           break;
         }
 
@@ -328,7 +328,7 @@ export const actions: Actions = {
               ...resource.spec,
               autoRenew: checkbox(form, 'autoRenew')
             }
-          };
+          } as Resource;
           break;
         }
 
@@ -368,7 +368,7 @@ export const actions: Actions = {
                 ...resource.spec,
                 staticSiteId
               }
-            };
+            } as Resource;
           } else {
             const value = text(form, 'value');
             const ttl = integer(form, 'ttl', {
@@ -393,7 +393,7 @@ export const actions: Actions = {
                 value,
                 ttl
               }
-            };
+            } as Resource;
           }
           break;
         }
@@ -406,7 +406,7 @@ export const actions: Actions = {
                 ...resource.spec,
                 public: checkbox(form, 'public')
               }
-            };
+            } as Resource;
           }
           break;
         }
@@ -440,7 +440,7 @@ export const actions: Actions = {
                 endpointId: endpointId || undefined,
                 deployOnChange: checkbox(form, 'deployOnChange')
               }
-            };
+            } as Resource;
           } else if (resource.provider === 's3') {
             const defaultRootObject =
               text(form, 'defaultRootObject') || 'index.html';
@@ -503,7 +503,7 @@ export const actions: Actions = {
                     }
                   : resource.spec.cloudFront
               }
-            };
+            } as Resource;
           }
           break;
         }
