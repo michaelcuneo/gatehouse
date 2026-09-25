@@ -5,7 +5,10 @@ import {
   updateResourceState,
   writeAuditLog,
 } from "@gatehouse/db";
-import { getProvider } from "@gatehouse/providers";
+import {
+  getProvider,
+  resourceOwnership,
+} from "@gatehouse/providers";
 import {
   getResource,
   listResources,
@@ -55,6 +58,36 @@ async function applyResource(
   let skipArtifactTransfer = false;
 
   try {
+    const ownership = resourceOwnership(resource);
+
+    if (ownership !== "gatehouse") {
+      const completedAt = new Date().toISOString();
+
+      updateResourceState(resource.id, {
+        status: resource.enabled ? "ready" : "disabled",
+        runtime: {
+          lastReconciledAt: completedAt,
+          lastError: undefined,
+          lastStatusMessage:
+            ownership === "observed"
+              ? "Observed resource; GateHouse mutation intentionally disabled"
+              : "Externally managed resource; GateHouse mutation intentionally disabled",
+        },
+        updatedAt: completedAt,
+      });
+
+      writeAuditLog({
+        resourceId: resource.id,
+        action: "reconcile",
+        success: true,
+        message:
+          ownership === "observed"
+            ? "Skipped mutation for observed resource"
+            : "Skipped mutation for externally managed resource",
+      });
+
+      return;
+    }
     if (resource.enabled && isDeployableResource(resource)) {
       deploymentId = startDeployment({
         resourceId: resource.id,
