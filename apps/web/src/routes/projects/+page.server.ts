@@ -2,7 +2,12 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 import { defaultProjectCapabilities } from '@gatehouse/core';
-import { listManagedProjects, saveManagedProject } from '@gatehouse/db';
+import { assertAwsStageAccess } from '@gatehouse/aws';
+import {
+  getManagedProject,
+  listManagedProjects,
+  saveManagedProject
+} from '@gatehouse/db';
 
 function text(form: FormData, key: string) {
   return String(form.get(key) ?? '').trim();
@@ -92,7 +97,101 @@ export const actions: Actions = {
     });
 
     return {
-      success: true
+      success: true,
+      action: 'registerProject'
+    };
+  },
+
+  addStage: async ({ request }) => {
+    const form = await request.formData();
+    const projectId = text(form, 'projectId');
+    const stageName = text(form, 'stageName');
+    const accountId = text(form, 'stageAccountId');
+    const primaryRegion =
+      text(form, 'stageRegion') || 'ap-southeast-2';
+    const roleArn = text(form, 'stageRoleArn');
+
+    const project = getManagedProject(projectId);
+
+    if (!project) {
+      return fail(404, {
+        error: 'Managed project not found.'
+      });
+    }
+
+    if (
+      !stageName ||
+      !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(stageName)
+    ) {
+      return fail(400, {
+        error:
+          'Stage name must start with a letter or number and contain only letters, numbers, hyphens or underscores.'
+      });
+    }
+
+    if (project.stages.some((stage) => stage.name === stageName)) {
+      return fail(409, {
+        error: 'That project already has a stage with this name.'
+      });
+    }
+
+    if (!/^\d{12}$/.test(accountId)) {
+      return fail(400, {
+        error: 'AWS account ID must be 12 digits.'
+      });
+    }
+
+    if (
+      roleArn &&
+      !/^arn:[^:]+:iam::\d{12}:role\/.+/.test(roleArn)
+    ) {
+      return fail(400, {
+        error: 'Assume-role ARN is not valid.'
+      });
+    }
+
+    const stage = {
+      id: crypto.randomUUID(),
+      name: stageName,
+      accountId,
+      primaryRegion,
+      access: roleArn
+        ? {
+            mode: 'assume-role' as const,
+            roleArn,
+            sourceIdentity: 'gatehouse'
+          }
+        : {
+            mode: 'default' as const
+          },
+      capabilities: {
+        ...defaultProjectCapabilities
+      },
+      selectors: [],
+      enabled: true
+    };
+
+    try {
+      await assertAwsStageAccess(stage);
+    } catch (cause) {
+      return fail(409, {
+        error:
+          'Stage was not added because AWS access verification failed: ' +
+          (cause instanceof Error ? cause.message : String(cause))
+      });
+    }
+
+    saveManagedProject({
+      ...project,
+      updatedAt: new Date().toISOString(),
+      stages: [...project.stages, stage]
+    });
+
+    return {
+      success: true,
+      action: 'addStage',
+      projectId: project.id,
+      stageName
     };
   }
 };
