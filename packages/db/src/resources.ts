@@ -14,7 +14,7 @@ export type StoredResourceKind =
   | "dns_record"
   | "storage_bucket"
   | "static_site"
-  | "dynamodb_table";
+  | "database_table";
 
 export interface StoredResourceMetadata {
   description?: string;
