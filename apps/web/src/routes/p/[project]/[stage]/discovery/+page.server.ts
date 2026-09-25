@@ -362,7 +362,7 @@ function importableResource(
       'certificateArn'
     );
     const defaultRootObject =
-      stringDetail(discovered, 'defaultRootObject') || 'index.html';
+      stringDetail(discovered, 'defaultRootObject') ?? '';
 
     let aliases: string[] = [];
 
