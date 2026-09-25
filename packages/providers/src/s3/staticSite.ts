@@ -45,6 +45,24 @@ function normalizePrefix(value?: string): string {
   return cleaned ? `${cleaned}/` : "";
 }
 
+function s3BucketFromOriginDomain(
+  domainName?: string,
+): string | null {
+  if (!domainName) return null;
+
+  const match = domainName.match(
+    /^(.+)\.s3(?:[.-][^.]+)?\.amazonaws\.com$/i,
+  );
+
+  return match?.[1] ?? null;
+}
+
+function normalizedOriginPath(value?: string): string {
+  if (!value) return "";
+
+  return value.trim().replace(/^\/+|\/+$/g, "");
+}
+
 function contentType(filename: string): string | undefined {
   switch (path.extname(filename).toLowerCase()) {
     case ".html":
@@ -571,6 +589,23 @@ export async function healthS3StaticSite(
       healthy: false,
       message: "CloudFront origin identity differs from desired state",
     };
+  }
+
+  if (resource.spec.contentMode === "external") {
+    const liveBucket = s3BucketFromOriginDomain(
+      distribution.originDomainName,
+    );
+
+    if (
+      liveBucket !== storage.spec.bucket ||
+      normalizedOriginPath(distribution.originPath) !==
+        normalizedOriginPath(resource.spec.prefix)
+    ) {
+      return {
+        healthy: false,
+        message: "CloudFront S3 origin differs from imported desired state",
+      };
+    }
   }
 
   return {
