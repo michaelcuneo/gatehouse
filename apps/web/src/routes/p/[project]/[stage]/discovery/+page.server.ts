@@ -546,7 +546,36 @@ export const actions: Actions = {
         }
       });
 
-      await reconcileResource(controlled.id);
+      try {
+        await reconcileResource(controlled.id);
+      } catch (cause) {
+        updateResource({
+          ...controlled,
+          metadata: {
+            ...(controlled.metadata ?? {}),
+            managed: false,
+            ownership: {
+              mode: 'observed'
+            }
+          },
+          status: 'ready',
+          runtime: {
+            ...(controlled.runtime ?? {}),
+            lastError:
+              cause instanceof Error
+                ? cause.message
+                : String(cause),
+            lastStatusMessage:
+              'Ownership rollback: initial GateHouse reconciliation failed'
+          }
+        });
+
+        return fail(500, {
+          error:
+            'GateHouse did not retain ownership because the initial reconciliation failed: ' +
+            (cause instanceof Error ? cause.message : String(cause))
+        });
+      }
 
       return {
         success: true,
