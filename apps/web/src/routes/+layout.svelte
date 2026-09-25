@@ -32,7 +32,8 @@
         { label: 'Static Sites', href: '/infrastructure/static-sites' },
         { label: 'DNS', href: '/infrastructure/dns' },
         { label: 'Certificates', href: '/infrastructure/certificates' },
-        { label: 'Storage', href: '/infrastructure/storage' }
+        { label: 'Storage', href: '/infrastructure/storage' },
+        { label: 'DynamoDB', href: '/infrastructure/dynamodb' }
       ]
     },
     {
