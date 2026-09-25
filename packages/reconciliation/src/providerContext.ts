@@ -8,26 +8,7 @@ import {
 } from "@gatehouse/resources";
 import type { Resource } from "@gatehouse/types";
 
-function dependencyIds(resource: Resource): string[] {
-  const ids = new Set(resource.metadata?.dependsOn ?? []);
-
-  if (
-    resource.kind === "dns_record" &&
-    resource.spec.mode === "cloudfront_alias"
-  ) {
-    ids.add(resource.spec.staticSiteId);
-  }
-
-  if (resource.kind === "static_site") {
-    if (resource.spec.endpointId) ids.add(resource.spec.endpointId);
-    if (resource.spec.storageId) ids.add(resource.spec.storageId);
-    if (resource.spec.cloudFront?.certificateId) {
-      ids.add(resource.spec.cloudFront.certificateId);
-    }
-  }
-
-  return [...ids];
-}
+import { resourceDependencyIds } from "./resourceDependencies";
 
 export function providerContextForResource(
   resourceId: string,
@@ -42,7 +23,7 @@ export function providerContextForResource(
     .map((stageId) => getManagedStageById(stageId))
     .filter((context) => context !== null);
 
-  const dependencyIdList = dependencyIds(resource);
+  const dependencyIdList = resourceDependencyIds(resource);
 
   const dependencies = dependencyIdList
     .map((dependencyId) => getResource(dependencyId))
