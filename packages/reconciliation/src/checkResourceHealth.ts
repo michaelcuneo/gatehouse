@@ -16,6 +16,10 @@ export async function checkResourceHealth(
     throw new Error(`Resource "${resourceId}" not found`);
   }
 
+  if (resource.status === "reconciling") {
+    return null;
+  }
+
   const checkedAt = new Date().toISOString();
 
   if (!resource.enabled) {
@@ -73,6 +77,10 @@ function healthCheckIsDue(
   resource: ReturnType<typeof listResources>[number],
   now: number,
 ): boolean {
+  if (resource.status === "reconciling") {
+    return false;
+  }
+
   const last = resource.runtime?.lastHealthCheckAt;
 
   if (!last) {
