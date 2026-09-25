@@ -100,6 +100,15 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp
       ON audit_logs(timestamp DESC);
 
+    CREATE TABLE IF NOT EXISTS aws_discovery_snapshots (
+      stage_id TEXT PRIMARY KEY,
+      scanned_at TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      FOREIGN KEY(stage_id)
+        REFERENCES managed_project_stages(id)
+        ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS deployments (
       id TEXT PRIMARY KEY,
       resource_id TEXT NOT NULL,
