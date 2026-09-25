@@ -4,6 +4,7 @@ export * from "./certificate";
 export * from "./dns";
 export * from "./storage";
 export * from "./static-site";
+export * from "./dynamodb";
 
 import type { EndpointResource } from "./endpoint";
 import type { ServiceResource } from "./service";
@@ -11,6 +12,7 @@ import type { CertificateResource } from "./certificate";
 import type { DNSRecordResource } from "./dns";
 import type { StorageBucketResource } from "./storage";
 import type { StaticSiteResource } from "./static-site";
+import type { DynamoDBTableResource } from "./dynamodb";
 
 export type Resource =
   | EndpointResource
@@ -18,4 +20,5 @@ export type Resource =
   | CertificateResource
   | DNSRecordResource
   | StorageBucketResource
-  | StaticSiteResource;
+  | StaticSiteResource
+  | DynamoDBTableResource;
