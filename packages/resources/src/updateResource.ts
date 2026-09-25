@@ -39,8 +39,17 @@ export function updateResource(resource: Resource): Resource {
     version: changed
       ? existing.version + 1
       : existing.version,
+    status: changed
+      ? "pending"
+      : resource.status,
     createdAt: existing.createdAt,
     updatedAt: new Date().toISOString(),
+    runtime: changed
+      ? {
+          ...(resource.runtime ?? existing.runtime),
+          lastStatusMessage: "Desired state changed; reconciliation pending",
+        }
+      : resource.runtime,
   };
 
   saveResource<Resource["spec"]>(updated);
