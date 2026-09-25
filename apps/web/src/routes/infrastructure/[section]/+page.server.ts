@@ -527,6 +527,7 @@ export const actions: Actions = {
           }
         },
         spec: {
+          provider: 'dynamodb',
           tableName,
           region,
           partitionKey: {
