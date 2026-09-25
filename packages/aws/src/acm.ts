@@ -28,6 +28,8 @@ export interface AcmCertificateState {
   arn: string;
   status?: string;
   domainName?: string;
+  domains: string[];
+  validationMethod?: "DNS" | "EMAIL";
   inUseBy: string[];
   validationRecords: Array<Omit<Route53RecordSpec, "zone">>;
 }
@@ -241,6 +243,16 @@ export async function ensureAcmCertificate(
     arn,
     status: detail.Status,
     domainName: detail.DomainName,
+    domains: [...new Set([
+      ...(detail.SubjectAlternativeNames ?? []),
+      ...(detail.DomainName ? [detail.DomainName] : []),
+    ].map((domain) => domain.toLowerCase()))],
+    validationMethod:
+      detail.DomainValidationOptions?.some(
+        (option) => option.ValidationMethod === "EMAIL",
+      )
+        ? "EMAIL"
+        : "DNS",
     inUseBy: detail.InUseBy ?? [],
     validationRecords: validationRecords(detail),
   };
@@ -279,6 +291,16 @@ export async function getAcmCertificateState(
     arn,
     status: detail.Status,
     domainName: detail.DomainName,
+    domains: [...new Set([
+      ...(detail.SubjectAlternativeNames ?? []),
+      ...(detail.DomainName ? [detail.DomainName] : []),
+    ].map((domain) => domain.toLowerCase()))],
+    validationMethod:
+      detail.DomainValidationOptions?.some(
+        (option) => option.ValidationMethod === "EMAIL",
+      )
+        ? "EMAIL"
+        : "DNS",
     inUseBy: detail.InUseBy ?? [],
     validationRecords: validationRecords(detail),
   };
