@@ -386,6 +386,79 @@
                 Allow public access configuration
               </label>
             {/if}
+          {:else if data.section.kind === 'dynamodb_table'}
+            <div class="field">
+              <label for="stageId">Project stage</label>
+              <select id="stageId" name="stageId" required>
+                <option value="">Select target stage</option>
+                {#each data.projectStages as stage}
+                  <option value={stage.stageId}>
+                    {stage.label} · {stage.accountId} · {stage.region}
+                  </option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="tableName">Table name</label>
+              <input id="tableName" name="tableName" required />
+            </div>
+
+            <div class="field">
+              <label for="region">Region</label>
+              <input id="region" name="region" placeholder="Uses selected stage region" />
+            </div>
+
+            <div class="field">
+              <label for="partitionKeyName">Partition key</label>
+              <input id="partitionKeyName" name="partitionKeyName" required />
+            </div>
+
+            <div class="field">
+              <label for="partitionKeyType">Partition key type</label>
+              <select id="partitionKeyType" name="partitionKeyType">
+                <option value="S">String</option>
+                <option value="N">Number</option>
+                <option value="B">Binary</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="sortKeyName">Sort key</label>
+              <input id="sortKeyName" name="sortKeyName" placeholder="Optional" />
+            </div>
+
+            <div class="field">
+              <label for="sortKeyType">Sort key type</label>
+              <select id="sortKeyType" name="sortKeyType">
+                <option value="S">String</option>
+                <option value="N">Number</option>
+                <option value="B">Binary</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="billingMode">Billing mode</label>
+              <select id="billingMode" name="billingMode">
+                <option value="PAY_PER_REQUEST">On-demand</option>
+                <option value="PROVISIONED">Provisioned</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="readCapacity">Read capacity</label>
+              <input id="readCapacity" name="readCapacity" type="number" min="1" value="1" />
+            </div>
+
+            <div class="field">
+              <label for="writeCapacity">Write capacity</label>
+              <input id="writeCapacity" name="writeCapacity" type="number" min="1" value="1" />
+            </div>
+
+            <label class="check-field">
+              <input name="deletionProtection" type="checkbox" checked />
+              Enable deletion protection
+            </label>
           {:else}
             <div class="field">
               <label for="deploymentTarget">Deployment target</label>
