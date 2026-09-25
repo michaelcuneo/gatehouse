@@ -11,6 +11,11 @@
   );
 
   const currentStageId = $derived(data.stageIds[0] ?? '');
+  const staticSiteStorageId = $derived(
+    data.resource.kind === 'static_site'
+      ? data.resource.spec.storageId
+      : undefined
+  );
 </script>
 
 <main class="container">
@@ -458,7 +463,7 @@
             <div class="field">
               <label>S3 target</label>
               <input
-                value={data.storage.find((storage) => storage.id === data.resource.spec.storageId)?.name ?? data.resource.spec.storageId ?? 'Unknown'}
+                value={data.storage.find((storage) => storage.id === staticSiteStorageId)?.name ?? staticSiteStorageId ?? 'Unknown'}
                 disabled
               />
               <p class="muted">
