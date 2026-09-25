@@ -3,12 +3,19 @@ import {
   ListStackResourcesCommand,
   ListStacksCommand,
 } from "@aws-sdk/client-cloudformation";
-import { ListBucketsCommand } from "@aws-sdk/client-s3";
+import {
+  GetBucketLocationCommand,
+  GetPublicAccessBlockCommand,
+  ListBucketsCommand,
+} from "@aws-sdk/client-s3";
 import {
   ListHostedZonesCommand,
   ListResourceRecordSetsCommand,
 } from "@aws-sdk/client-route-53";
-import { ListCertificatesCommand } from "@aws-sdk/client-acm";
+import {
+  DescribeCertificateCommand,
+  ListCertificatesCommand,
+} from "@aws-sdk/client-acm";
 import { ListDistributionsCommand } from "@aws-sdk/client-cloudfront";
 import { ListFunctionsCommand } from "@aws-sdk/client-lambda";
 import { ListTablesCommand } from "@aws-sdk/client-dynamodb";
@@ -83,9 +90,9 @@ function normalisePhysicalId(value: string): string[] {
 
   return [
     trimmed,
-    trimmed.replace(/.$/, ""),
+    trimmed.replace(/\.$/, ""),
     trimmed.toLowerCase(),
-    trimmed.replace(/.$/, "").toLowerCase(),
+    trimmed.replace(/\.$/, "").toLowerCase(),
   ];
 }
 
@@ -245,25 +252,72 @@ async function discoverS3(
 ): Promise<AwsDiscoveredResource[]> {
   const { s3 } = awsClientsForStage(stage);
   const result = await s3.send(new ListBucketsCommand({}));
+  const resources: AwsDiscoveredResource[] = [];
 
-  return (result.Buckets ?? [])
-    .filter((bucket) => bucket.Name)
-    .map((bucket) =>
+  for (const bucket of result.Buckets ?? []) {
+    if (!bucket.Name) continue;
+
+    const location = await s3.send(
+      new GetBucketLocationCommand({
+        Bucket: bucket.Name,
+      }),
+    );
+    const region =
+      !location.LocationConstraint
+        ? "us-east-1"
+        : location.LocationConstraint === "EU"
+          ? "eu-west-1"
+          : String(location.LocationConstraint);
+
+    let publicAccessBlocked: boolean | null = null;
+
+    try {
+      const block = await s3.send(
+        new GetPublicAccessBlockCommand({
+          Bucket: bucket.Name,
+        }),
+      );
+      const config = block.PublicAccessBlockConfiguration;
+
+      publicAccessBlocked = Boolean(
+        config?.BlockPublicAcls &&
+        config.IgnorePublicAcls &&
+        config.BlockPublicPolicy &&
+        config.RestrictPublicBuckets,
+      );
+    } catch (cause) {
+      const name =
+        cause && typeof cause === "object" && "name" in cause
+          ? String((cause as { name?: unknown }).name)
+          : "";
+
+      if (name === "NoSuchPublicAccessBlockConfiguration") {
+        publicAccessBlocked = false;
+      } else {
+        throw cause;
+      }
+    }
+
+    resources.push(
       discovered(
         {
           id: `s3:${bucket.Name}`,
           service: "s3",
           resourceType: "AWS::S3::Bucket",
-          name: bucket.Name!,
-          physicalId: bucket.Name!,
-          region: "global",
+          name: bucket.Name,
+          physicalId: bucket.Name,
+          region,
           details: {
             createdAt: bucket.CreationDate?.toISOString() ?? null,
+            publicAccessBlocked,
           },
         },
         ownership,
       ),
     );
+  }
+
+  return resources;
 }
 
 async function discoverRoute53(
@@ -336,7 +390,7 @@ async function discoverRoute53(
         for (const record of records.ResourceRecordSets ?? []) {
           if (!record.Name || !record.Type) continue;
 
-          const physicalId = record.Name.replace(/.$/, "");
+          const physicalId = record.Name.replace(/\.$/, "");
 
           resources.push(
             discovered(
@@ -348,9 +402,17 @@ async function discoverRoute53(
                 physicalId,
                 region: "global",
                 details: {
+                  zone: zone.Name.replace(/\.$/, ""),
                   type: record.Type,
                   ttl: record.TTL ?? null,
                   alias: Boolean(record.AliasTarget),
+                  value:
+                    record.ResourceRecords?.length === 1
+                      ? record.ResourceRecords[0]?.Value ?? null
+                      : null,
+                  valueCount: record.ResourceRecords?.length ?? 0,
+                  aliasDnsName:
+                    record.AliasTarget?.DNSName?.replace(/\.$/, "") ?? null,
                 },
               },
               ownership,
@@ -391,6 +453,13 @@ async function discoverAcm(
     for (const certificate of result.CertificateSummaryList ?? []) {
       if (!certificate.CertificateArn) continue;
 
+      const detail = await acm.send(
+        new DescribeCertificateCommand({
+          CertificateArn: certificate.CertificateArn,
+        }),
+      );
+      const certificateDetail = detail.Certificate;
+
       resources.push(
         discovered(
           {
@@ -398,11 +467,27 @@ async function discoverAcm(
             service: "acm",
             resourceType: "AWS::CertificateManager::Certificate",
             name:
+              certificateDetail?.DomainName ??
               certificate.DomainName ??
               certificate.CertificateArn,
             physicalId: certificate.CertificateArn,
             arn: certificate.CertificateArn,
             region,
+            details: {
+              status: certificateDetail?.Status ?? null,
+              validation:
+                certificateDetail?.DomainValidationOptions?.some(
+                  (option) => option.ValidationMethod === "EMAIL",
+                )
+                  ? "email"
+                  : "dns",
+              domains: JSON.stringify(
+                certificateDetail?.SubjectAlternativeNames ??
+                [certificateDetail?.DomainName ?? certificate.DomainName]
+                  .filter(Boolean),
+              ),
+              inUseBy: certificateDetail?.InUseBy?.length ?? 0,
+            },
           },
           ownership,
         ),
