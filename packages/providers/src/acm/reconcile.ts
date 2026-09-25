@@ -28,8 +28,8 @@ function target(resource: Resource, context: ProviderContext) {
 
   const spec: AcmCertificateSpec = {
     resourceId: resource.id,
-    domains: resource.spec.domains,
-    wildcard: resource.spec.wildcard,
+    domains: resolved.resource.spec.domains,
+    wildcard: resolved.resource.spec.wildcard,
     region: resource.spec.region ?? "us-east-1",
     certificateArn: resource.spec.certificateArn,
     validation: resource.spec.validation ?? "dns",
@@ -106,12 +106,12 @@ export async function healthAcmResource(
   }
 
   const desiredDomains = new Set(
-    resource.spec.domains
+    resolved.resource.spec.domains
       .map((domain) => domain.trim().toLowerCase())
       .filter(Boolean),
   );
 
-  if (resource.spec.wildcard) {
+  if (resolved.resource.spec.wildcard) {
     const primary = [...desiredDomains][0];
 
     if (primary) {
@@ -134,7 +134,7 @@ export async function healthAcmResource(
   }
 
   const desiredValidation =
-    (resource.spec.validation ?? "dns") === "email"
+    (resolved.resource.spec.validation ?? "dns") === "email"
       ? "EMAIL"
       : "DNS";
 
