@@ -14,7 +14,8 @@ export type StoredResourceKind =
   | "dns_record"
   | "storage_bucket"
   | "static_site"
-  | "database_table";
+  | "database_table"
+  | "function";
 
 export interface StoredResourceMetadata {
   description?: string;
