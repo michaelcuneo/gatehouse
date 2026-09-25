@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./ownership";
 export * from "./registry";
 
 export * from "./nginx";
