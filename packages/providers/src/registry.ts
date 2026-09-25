@@ -2,6 +2,7 @@ import { acmProvider } from "./acm";
 import { filesystemProvider } from "./filesystem";
 import { dynamodbProvider } from "./dynamodb";
 import { nginxProvider } from "./nginx";
+import { lambdaProvider } from "./lambda";
 import { route53Provider } from "./route53";
 import { s3Provider } from "./s3";
 import { systemdProvider } from "./systemd";
@@ -14,6 +15,7 @@ export const providers = {
   s3: s3Provider,
   acm: acmProvider,
   dynamodb: dynamodbProvider,
+  lambda: lambdaProvider,
 };
 
 export function getProvider(name: string) {
