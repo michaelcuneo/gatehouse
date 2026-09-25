@@ -46,7 +46,7 @@ const sections: Record<
     description: 'Deployable static sites targeting local storage or AWS.'
   },
   dynamodb: {
-    kind: 'dynamodb_table',
+    kind: 'database_table',
     title: 'DynamoDB',
     description: 'AWS DynamoDB tables with safe primary-key and capacity management.'
   }
@@ -512,7 +512,7 @@ export const actions: Actions = {
 
       resource = {
         id: crypto.randomUUID(),
-        kind: 'dynamodb_table',
+        kind: 'database_table',
         name,
         provider: 'dynamodb',
         version: 1,
