@@ -32,6 +32,23 @@
     }
 
     if (
+      resource.service === 'dynamodb' &&
+      resource.resourceType === 'AWS::DynamoDB::Table'
+    ) {
+      return (
+        Number(resource.details?.globalSecondaryIndexes ?? 0) === 0 &&
+        Number(resource.details?.localSecondaryIndexes ?? 0) === 0 &&
+        typeof resource.details?.partitionKey === 'string' &&
+        ['S', 'N', 'B'].includes(
+          String(resource.details?.partitionKeyType ?? '')
+        ) &&
+        ['PAY_PER_REQUEST', 'PROVISIONED'].includes(
+          String(resource.details?.billingMode ?? '')
+        )
+      );
+    }
+
+    if (
       resource.service === 'route53' &&
       resource.resourceType === 'AWS::Route53::RecordSet'
     ) {
