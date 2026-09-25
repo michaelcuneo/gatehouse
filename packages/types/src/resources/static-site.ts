@@ -10,6 +10,11 @@ export interface StaticSiteCloudFrontSpec {
    */
   distributionId?: string;
 
+  /**
+   * Existing origin id used by an adopted distribution.
+   */
+  originId?: string;
+
   defaultRootObject?: string;
 
   aliases?: string[];
@@ -18,6 +23,12 @@ export interface StaticSiteCloudFrontSpec {
 }
 
 export interface StaticSiteSpec {
+  /**
+   * managed: GateHouse synchronizes buildDirectory into storage.
+   * external: GateHouse manages delivery configuration only and leaves content untouched.
+   */
+  contentMode?: "managed" | "external";
+
   buildDirectory: string;
 
   /**
