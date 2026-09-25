@@ -641,8 +641,17 @@ async function discoverLambda(
             region,
             details: {
               runtime: fn.Runtime ?? null,
-              memorySize: fn.MemorySize ?? null,
-              timeout: fn.Timeout ?? null,
+              handler: fn.Handler ?? null,
+              roleArn: fn.Role ?? null,
+              memorySize: fn.MemorySize ?? 128,
+              timeout: fn.Timeout ?? 3,
+              architecture:
+                fn.Architectures?.[0] ?? "x86_64",
+              packageType: fn.PackageType ?? "Zip",
+              state: fn.State ?? null,
+              layerCount: fn.Layers?.length ?? 0,
+              environmentVariableCount:
+                Object.keys(fn.Environment?.Variables ?? {}).length,
             },
           },
           ownership,
