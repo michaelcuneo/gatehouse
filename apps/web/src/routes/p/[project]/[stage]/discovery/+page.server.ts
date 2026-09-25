@@ -88,9 +88,34 @@ function numberDetail(
   return typeof value === 'number' ? value : null;
 }
 
+function importedAwsResource(
+  stageId: string,
+  predicate: (resource: Resource) => boolean
+) {
+  return (
+    listResources().find(
+      (resource) =>
+        resource.metadata?.importedFrom?.provider === 'aws' &&
+        listStageIdsForResource(resource.id).includes(stageId) &&
+        predicate(resource)
+    ) ?? null
+  );
+}
+
+function s3BucketFromOriginDomain(
+  domainName: string
+): string | null {
+  const match = domainName.match(
+    /^(.+)\.s3(?:[.-][^.]+)?\.amazonaws\.com$/i
+  );
+
+  return match?.[1] ?? null;
+}
+
 function importableResource(
   discovered: AwsDiscoveredResource,
-  accountId: string
+  accountId: string,
+  stageId: string
 ): Resource {
   const now = new Date().toISOString();
   const ownership =
@@ -310,6 +335,154 @@ function importableResource(
   }
 
   if (
+    discovered.service === 'cloudfront' &&
+    discovered.resourceType === 'AWS::CloudFront::Distribution'
+  ) {
+    const originCount = numberDetail(discovered, 'originCount') ?? 0;
+    const originId = stringDetail(discovered, 'originId');
+    const originDomainName = stringDetail(
+      discovered,
+      'originDomainName'
+    );
+    const originPath = stringDetail(discovered, 'originPath') ?? '';
+    const originIsS3 = booleanDetail(discovered, 'originIsS3');
+    const defaultTargetOriginId = stringDetail(
+      discovered,
+      'defaultTargetOriginId'
+    );
+    const cacheBehaviors =
+      numberDetail(discovered, 'cacheBehaviors') ?? 0;
+    const lambdaAssociations =
+      numberDetail(discovered, 'lambdaAssociations') ?? 0;
+    const functionAssociations =
+      numberDetail(discovered, 'functionAssociations') ?? 0;
+    const aliasesJson = stringDetail(discovered, 'aliases');
+    const certificateArn = stringDetail(
+      discovered,
+      'certificateArn'
+    );
+    const defaultRootObject =
+      stringDetail(discovered, 'defaultRootObject') || 'index.html';
+
+    let aliases: string[] = [];
+
+    try {
+      const parsed = aliasesJson ? JSON.parse(aliasesJson) : [];
+      aliases = Array.isArray(parsed)
+        ? parsed.filter(
+            (alias): alias is string =>
+              typeof alias === 'string' && Boolean(alias.trim())
+          )
+        : [];
+    } catch {
+      aliases = [];
+    }
+
+    if (
+      originCount !== 1 ||
+      !originId ||
+      !originDomainName ||
+      !originIsS3 ||
+      defaultTargetOriginId !== originId ||
+      cacheBehaviors !== 0 ||
+      lambdaAssociations !== 0 ||
+      functionAssociations !== 0
+    ) {
+      throw new Error(
+        'This CloudFront distribution has multiple origins, additional cache behaviours, or edge functions that GateHouse cannot reproduce safely yet.'
+      );
+    }
+
+    const bucketName = s3BucketFromOriginDomain(originDomainName);
+
+    if (!bucketName) {
+      throw new Error(
+        'GateHouse could not map the CloudFront origin to an S3 bucket safely.'
+      );
+    }
+
+    const storage = importedAwsResource(
+      stageId,
+      (resource) =>
+        resource.kind === 'storage_bucket' &&
+        resource.spec.provider === 's3' &&
+        resource.spec.bucket === bucketName
+    );
+
+    if (!storage || storage.kind !== 'storage_bucket') {
+      throw new Error(
+        `Import the S3 bucket "${bucketName}" into this stage before importing this CloudFront distribution.`
+      );
+    }
+
+    let certificateId: string | undefined;
+
+    if (aliases.length) {
+      if (!certificateArn) {
+        throw new Error(
+          'This CloudFront distribution uses custom aliases but no ACM certificate ARN was discovered.'
+        );
+      }
+
+      const certificate = importedAwsResource(
+        stageId,
+        (resource) =>
+          resource.kind === 'certificate' &&
+          resource.spec.provider === 'aws_acm' &&
+          resource.spec.certificateArn === certificateArn
+      );
+
+      if (!certificate || certificate.kind !== 'certificate') {
+        throw new Error(
+          'Import the CloudFront ACM certificate into this stage before importing this distribution.'
+        );
+      }
+
+      certificateId = certificate.id;
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      kind: 'static_site',
+      name: discovered.name,
+      provider: 's3',
+      version: 1,
+      enabled: true,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+      metadata: {
+        ...metadata,
+        dependsOn: [
+          storage.id,
+          ...(certificateId ? [certificateId] : [])
+        ]
+      },
+      runtime: {
+        lastStatusMessage:
+          discovered.ownership === 'external'
+            ? 'Imported CloudFront site; externally managed'
+            : 'Imported CloudFront site; observation only'
+      },
+      spec: {
+        contentMode: 'external',
+        buildDirectory: '',
+        storageId: storage.id,
+        prefix: originPath.replace(/^\/+|\/+$/g, '') || undefined,
+        cloudFront: {
+          enabled: true,
+          distributionId: discovered.physicalId,
+          originId,
+          defaultRootObject,
+          aliases: aliases.length ? aliases : undefined,
+          certificateId
+        },
+        deployOnChange: false
+      }
+    };
+  }
+
+  if (
     discovered.service === 'acm' &&
     discovered.resourceType ===
       'AWS::CertificateManager::Certificate' &&
@@ -500,7 +673,8 @@ export const actions: Actions = {
     try {
       const resource = importableResource(
         discovered,
-        context.stage.accountId
+        context.stage.accountId,
+        context.stage.id
       );
 
       createResource(resource);
