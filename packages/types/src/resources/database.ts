@@ -1,26 +1,26 @@
 import type { BaseResource } from "../core/resource";
 
-export type DynamoDbAttributeType = "S" | "N" | "B";
-export type DynamoDbBillingMode = "PAY_PER_REQUEST" | "PROVISIONED";
+export type DynamoDBAttributeType = "S" | "N" | "B";
+export type DynamoDBBillingMode = "PAY_PER_REQUEST" | "PROVISIONED";
 
-export interface DynamoDbKeyAttribute {
+export interface DynamoDBKeyAttribute {
   name: string;
-  type: DynamoDbAttributeType;
+  type: DynamoDBAttributeType;
 }
 
-export interface DynamoDbTableSpec {
+export interface DynamoDBTableSpec {
   provider: "dynamodb";
   tableName: string;
   region: string;
-  partitionKey: DynamoDbKeyAttribute;
-  sortKey?: DynamoDbKeyAttribute;
-  billingMode: DynamoDbBillingMode;
+  partitionKey: DynamoDBKeyAttribute;
+  sortKey?: DynamoDBKeyAttribute;
+  billingMode: DynamoDBBillingMode;
   readCapacity?: number;
   writeCapacity?: number;
-  deletionProtectionEnabled?: boolean;
+  deletionProtection?: boolean;
 }
 
 export type DatabaseTableResource = BaseResource<
   "database_table",
-  DynamoDbTableSpec
+  DynamoDBTableSpec
 >;
