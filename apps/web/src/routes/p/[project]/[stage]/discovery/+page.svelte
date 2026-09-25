@@ -49,6 +49,21 @@
     }
 
     if (
+      resource.service === 'cloudfront' &&
+      resource.resourceType === 'AWS::CloudFront::Distribution'
+    ) {
+      return (
+        resource.details?.originCount === 1 &&
+        resource.details?.originIsS3 === true &&
+        resource.details?.defaultTargetOriginId ===
+          resource.details?.originId &&
+        Number(resource.details?.cacheBehaviors ?? 0) === 0 &&
+        Number(resource.details?.lambdaAssociations ?? 0) === 0 &&
+        Number(resource.details?.functionAssociations ?? 0) === 0
+      );
+    }
+
+    if (
       resource.service === 'route53' &&
       resource.resourceType === 'AWS::Route53::RecordSet'
     ) {
