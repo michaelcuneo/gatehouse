@@ -415,7 +415,7 @@ export const actions: Actions = {
           break;
         }
 
-        case 'dynamodb_table': {
+        case 'database_table': {
           const billingMode = text(form, 'billingMode');
           const readCapacity = integer(form, 'readCapacity', {
             min: 1,
