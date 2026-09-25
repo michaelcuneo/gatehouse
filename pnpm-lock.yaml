@@ -120,6 +120,9 @@ importers:
       '@gatehouse/core':
         specifier: workspace:*
         version: link:../core
+      '@gatehouse/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       typescript:
         specifier: ^5.8.3
