@@ -261,7 +261,7 @@ function importableResource(
 
     return {
       id: crypto.randomUUID(),
-      kind: 'dynamodb_table',
+      kind: 'database_table',
       name: discovered.name,
       provider: 'dynamodb',
       version: 1,
@@ -277,6 +277,7 @@ function importableResource(
             : 'Imported from AWS discovery; observation only'
       },
       spec: {
+        provider: 'dynamodb',
         tableName: discovered.physicalId,
         region: discovered.region,
         partitionKey: {
