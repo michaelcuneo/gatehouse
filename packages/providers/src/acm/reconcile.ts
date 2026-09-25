@@ -93,15 +93,58 @@ export async function healthAcmResource(
     };
   }
 
-  if (state.status === "ISSUED") {
+  if (state.status !== "ISSUED") {
     return {
-      healthy: true,
-      message: `ACM certificate is issued (${state.arn})`,
+      healthy: false,
+      message: `ACM certificate status is ${state.status ?? "unknown"}`,
+    };
+  }
+
+  const desiredDomains = new Set(
+    resource.spec.domains
+      .map((domain) => domain.trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  if (resource.spec.wildcard) {
+    const primary = [...desiredDomains][0];
+
+    if (primary) {
+      desiredDomains.add(
+        primary.startsWith("*.") ? primary : `*.${primary}`,
+      );
+    }
+  }
+
+  const actualDomains = new Set(state.domains);
+
+  if (
+    desiredDomains.size !== actualDomains.size ||
+    [...desiredDomains].some((domain) => !actualDomains.has(domain))
+  ) {
+    return {
+      healthy: false,
+      message: "ACM certificate domains differ from desired state",
+    };
+  }
+
+  const desiredValidation =
+    (resource.spec.validation ?? "dns") === "email"
+      ? "EMAIL"
+      : "DNS";
+
+  if (
+    state.validationMethod &&
+    state.validationMethod !== desiredValidation
+  ) {
+    return {
+      healthy: false,
+      message: "ACM certificate validation method differs from desired state",
     };
   }
 
   return {
-    healthy: false,
-    message: `ACM certificate status is ${state.status ?? "unknown"}`,
+    healthy: true,
+    message: `ACM certificate is issued and matches desired state (${state.arn})`,
   };
 }
