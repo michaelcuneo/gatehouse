@@ -27,6 +27,14 @@ export interface StoredResourceMetadata {
       name?: string;
     };
   };
+  importedFrom?: {
+    provider: "aws";
+    discoveryId: string;
+    physicalId: string;
+    accountId: string;
+    region: string;
+    importedAt: string;
+  };
   dependsOn?: string[];
 }
 
