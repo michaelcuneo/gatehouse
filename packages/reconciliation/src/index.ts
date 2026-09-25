@@ -8,3 +8,4 @@ export * from "./providerContext";
 export * from "./artifactFingerprint";
 export * from "./reconcileDueResources";
 export * from "./resourceDependencies";
+export * from "./resourceLifecycle";
