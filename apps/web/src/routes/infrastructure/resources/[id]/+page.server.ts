@@ -94,22 +94,27 @@ function allStages() {
   );
 }
 
-function syncOptionalStage(
+function stageChangeNeeded(
   resourceId: string,
   requestedStageId: string
 ) {
-  const existing = listStageIdsForResource(resourceId);
-
   if (requestedStageId && !getManagedStageById(requestedStageId)) {
     throw new Error('Selected project stage does not exist.');
   }
 
-  if (
-    existing.length === 1 &&
+  const existing = listStageIdsForResource(resourceId);
+
+  return !(
+    existing.length === (requestedStageId ? 1 : 0) &&
     existing[0] === requestedStageId
-  ) {
-    return false;
-  }
+  );
+}
+
+function applyOptionalStage(
+  resourceId: string,
+  requestedStageId: string
+) {
+  const existing = listStageIdsForResource(resourceId);
 
   for (const stageId of existing) {
     detachResourceFromStage(stageId, resourceId);
@@ -118,8 +123,6 @@ function syncOptionalStage(
   if (requestedStageId) {
     attachResourceToStage(requestedStageId, resourceId);
   }
-
-  return true;
 }
 
 function commonUpdate(
@@ -176,13 +179,14 @@ export const actions: Actions = {
 
     try {
       let updated = commonUpdate(resource, form);
+      let requestedStageId: string | null = null;
       let relatedDesiredStateChanged = false;
 
       switch (resource.kind) {
         case 'endpoint': {
           const mode = text(form, 'mode');
           const host = text(form, 'host');
-          const requestedStageId = text(form, 'stageId');
+          requestedStageId = text(form, 'stageId');
 
           if (!host) {
             return fail(400, { error: 'Endpoint hostname is required.' });
@@ -240,7 +244,7 @@ export const actions: Actions = {
             return fail(400, { error: 'Unsupported endpoint mode.' });
           }
 
-          relatedDesiredStateChanged = syncOptionalStage(
+          relatedDesiredStateChanged = stageChangeNeeded(
             resource.id,
             requestedStageId
           );
@@ -508,6 +512,10 @@ export const actions: Actions = {
       const saved = updateResource(updated, {
         forceDesiredStateChange: relatedDesiredStateChanged
       });
+
+      if (requestedStageId !== null && relatedDesiredStateChanged) {
+        applyOptionalStage(resource.id, requestedStageId);
+      }
 
       return {
         success: true,
