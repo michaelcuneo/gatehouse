@@ -19,6 +19,20 @@ export type ResourceStatus =
   | "error"
   | "disabled";
 
+export type ResourceOwnershipMode =
+  | "gatehouse"
+  | "external"
+  | "observed";
+
+export interface ResourceOwnership {
+  mode: ResourceOwnershipMode;
+  externalOwner?: {
+    type: "cloudformation" | "sst" | "cdk" | "unknown";
+    id?: string;
+    name?: string;
+  };
+}
+
 export interface BaseResource<TKind extends ResourceKind, TSpec> {
   id: string;
 
@@ -43,7 +57,13 @@ export interface BaseResource<TKind extends ResourceKind, TSpec> {
 
     tags?: string[];
 
+    /**
+     * Legacy ownership flag. New code should use ownership.
+     * true means GateHouse-owned; false means externally owned.
+     */
     managed?: boolean;
+
+    ownership?: ResourceOwnership;
 
     dependsOn?: ResourceId[];
   };
