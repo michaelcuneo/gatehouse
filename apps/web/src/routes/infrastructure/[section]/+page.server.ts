@@ -10,7 +10,7 @@ import {
   type StoredResourceKind
 } from '@gatehouse/db';
 import { reconcileResource } from '@gatehouse/reconciliation';
-import type { StaticSiteSpec } from '@gatehouse/types';
+import type { Resource, StaticSiteSpec } from '@gatehouse/types';
 import {
   createResource,
   getResource
@@ -44,6 +44,11 @@ const sections: Record<
     kind: 'static_site',
     title: 'Static Sites',
     description: 'Deployable static sites targeting local storage or AWS.'
+  },
+  dynamodb: {
+    kind: 'dynamodb_table',
+    title: 'DynamoDB',
+    description: 'AWS DynamoDB tables with safe primary-key and capacity management.'
   }
 };
 
@@ -444,6 +449,111 @@ export const actions: Actions = {
       } else {
         return fail(400, { error: 'Unsupported storage provider.' });
       }
+    } else if (params.section === 'dynamodb') {
+      stageId = text(form, 'stageId');
+      const selectedStage = stageId ? getManagedStageById(stageId) : null;
+      const tableName = text(form, 'tableName');
+      const region =
+        text(form, 'region') ||
+        selectedStage?.stage.primaryRegion ||
+        '';
+      const partitionKeyName = text(form, 'partitionKeyName');
+      const partitionKeyType = text(form, 'partitionKeyType') || 'S';
+      const sortKeyName = text(form, 'sortKeyName');
+      const sortKeyType = text(form, 'sortKeyType') || 'S';
+      const billingMode =
+        text(form, 'billingMode') || 'PAY_PER_REQUEST';
+      const readCapacity = Number(text(form, 'readCapacity') || 1);
+      const writeCapacity = Number(text(form, 'writeCapacity') || 1);
+
+      if (!stageId || !selectedStage) {
+        return fail(400, {
+          error: 'A valid project stage is required for DynamoDB.'
+        });
+      }
+
+      if (!tableName || !partitionKeyName || !region) {
+        return fail(400, {
+          error: 'Table name, partition key and region are required.'
+        });
+      }
+
+      if (
+        !['S', 'N', 'B'].includes(partitionKeyType) ||
+        !['S', 'N', 'B'].includes(sortKeyType)
+      ) {
+        return fail(400, {
+          error: 'DynamoDB key types must be String, Number or Binary.'
+        });
+      }
+
+      if (
+        billingMode !== 'PAY_PER_REQUEST' &&
+        billingMode !== 'PROVISIONED'
+      ) {
+        return fail(400, {
+          error: 'Unsupported DynamoDB billing mode.'
+        });
+      }
+
+      if (
+        billingMode === 'PROVISIONED' &&
+        (
+          !Number.isInteger(readCapacity) ||
+          !Number.isInteger(writeCapacity) ||
+          readCapacity < 1 ||
+          writeCapacity < 1
+        )
+      ) {
+        return fail(400, {
+          error: 'Provisioned capacity must use positive integers.'
+        });
+      }
+
+      resource = {
+        id: crypto.randomUUID(),
+        kind: 'dynamodb_table',
+        name,
+        provider: 'dynamodb',
+        version: 1,
+        enabled: true,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          managed: true,
+          ownership: {
+            mode: 'gatehouse'
+          }
+        },
+        spec: {
+          tableName,
+          region,
+          partitionKey: {
+            name: partitionKeyName,
+            type: partitionKeyType as 'S' | 'N' | 'B'
+          },
+          sortKey: sortKeyName
+            ? {
+                name: sortKeyName,
+                type: sortKeyType as 'S' | 'N' | 'B'
+              }
+            : undefined,
+          billingMode: billingMode as
+            | 'PAY_PER_REQUEST'
+            | 'PROVISIONED',
+          readCapacity:
+            billingMode === 'PROVISIONED'
+              ? readCapacity
+              : undefined,
+          writeCapacity:
+            billingMode === 'PROVISIONED'
+              ? writeCapacity
+              : undefined,
+          deletionProtection:
+            form.get('deletionProtection') === 'on'
+        }
+      };
     } else if (params.section === 'static-sites') {
       const deploymentTarget = text(form, 'deploymentTarget') || 'local';
       const buildDirectory = text(form, 'buildDirectory');
