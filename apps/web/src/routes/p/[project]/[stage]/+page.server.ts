@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 import { assertAwsStageAccess } from '@gatehouse/aws';
 import {
+  deleteAwsDiscoverySnapshot,
   getManagedStage,
   listResourcesForStage,
   saveManagedProject
@@ -226,6 +227,8 @@ export const actions: Actions = {
         });
       }
     }
+
+    deleteAwsDiscoverySnapshot(context.stage.id);
 
     const updatedProject = saveManagedProject({
       ...context.project,
