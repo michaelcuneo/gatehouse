@@ -5,7 +5,7 @@ export function validateDynamoDBResource(
   resource: Resource,
   context: ProviderContext,
 ): void {
-  if (resource.kind !== "dynamodb_table") {
+  if (resource.kind !== "database_table") {
     throw new Error(
       `DynamoDB provider cannot manage resource kind "${resource.kind}"`,
     );
