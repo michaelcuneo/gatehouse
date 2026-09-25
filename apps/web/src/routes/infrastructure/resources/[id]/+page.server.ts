@@ -467,9 +467,11 @@ export const actions: Actions = {
         }
 
         case 'static_site': {
+          const externalContent =
+            resource.spec.contentMode === 'external';
           const buildDirectory = text(form, 'buildDirectory');
 
-          if (!buildDirectory) {
+          if (!externalContent && !buildDirectory) {
             return fail(400, {
               error: 'Build directory is required.'
             });
@@ -547,8 +549,12 @@ export const actions: Actions = {
               ...updated,
               spec: {
                 ...resource.spec,
-                buildDirectory,
-                deployOnChange: checkbox(form, 'deployOnChange'),
+                buildDirectory: externalContent
+                  ? resource.spec.buildDirectory
+                  : buildDirectory,
+                deployOnChange: externalContent
+                  ? false
+                  : checkbox(form, 'deployOnChange'),
                 cloudFront: resource.spec.cloudFront?.enabled
                   ? {
                       ...resource.spec.cloudFront,
