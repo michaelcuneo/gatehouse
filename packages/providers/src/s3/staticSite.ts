@@ -297,21 +297,14 @@ async function cloudFrontSpec(
     certificateArn = state.arn;
   }
 
-  if (
-    resource.spec.cloudFront?.distributionId &&
-    (aliases.length || certificateArn)
-  ) {
-    throw new Error(
-      "GateHouse does not modify aliases or certificates on adopted CloudFront distributions",
-    );
-  }
-
   return {
     resourceId: resource.id,
     bucket: storage.spec.bucket,
     bucketRegion: storage.spec.region,
     prefix: resource.spec.prefix,
     distributionId: resource.spec.cloudFront?.distributionId,
+    originId: resource.spec.cloudFront?.originId,
+    manageOrigin: resource.spec.contentMode !== "external",
     defaultRootObject:
       resource.spec.cloudFront?.defaultRootObject ?? "index.html",
     aliases,
@@ -347,7 +340,10 @@ export function validateS3StaticSite(
     );
   }
 
-  if (!resource.spec.buildDirectory.trim()) {
+  if (
+    resource.spec.contentMode !== "external" &&
+    !resource.spec.buildDirectory.trim()
+  ) {
     throw new Error("Static site build directory is required");
   }
 
@@ -404,13 +400,23 @@ export async function reconcileS3StaticSite(
       await cloudFrontSpec(resource, storage, context),
     );
 
-    await grantCloudFrontReadAccess(
-      targetStage,
-      targetBucket,
-      resource.id,
-      distribution.id,
-      resource.spec.prefix,
-    );
+    if (resource.spec.contentMode !== "external") {
+      await grantCloudFrontReadAccess(
+        targetStage,
+        targetBucket,
+        resource.id,
+        distribution.id,
+        resource.spec.prefix,
+      );
+    }
+  }
+
+  if (resource.spec.contentMode === "external") {
+    return {
+      artifactTransferred: false,
+      message:
+        "CloudFront configuration reconciled; existing S3 content retained",
+    };
   }
 
   if (context.deployment?.skipArtifactTransfer) {
@@ -489,23 +495,29 @@ export async function healthS3StaticSite(
 ) {
   const storage = storageDependency(resource, context);
   const targetStage = stage(context);
-  const exists = await s3DeploymentManifestExists(
-    targetStage,
-    bucketSpec(storage),
-    resource.id,
-  );
+  const externalContent = resource.spec.contentMode === "external";
 
-  if (!exists) {
-    return {
-      healthy: false,
-      message: "S3 static-site deployment manifest is missing",
-    };
+  if (!externalContent) {
+    const exists = await s3DeploymentManifestExists(
+      targetStage,
+      bucketSpec(storage),
+      resource.id,
+    );
+
+    if (!exists) {
+      return {
+        healthy: false,
+        message: "S3 static-site deployment manifest is missing",
+      };
+    }
   }
 
   if (!resource.spec.cloudFront?.enabled) {
     return {
       healthy: true,
-      message: "S3 static-site deployment manifest exists",
+      message: externalContent
+        ? "External S3 content retained"
+        : "S3 static-site deployment manifest exists",
     };
   }
 
@@ -528,11 +540,44 @@ export async function healthS3StaticSite(
     };
   }
 
+  const desired = await cloudFrontSpec(
+    resource,
+    storage,
+    context,
+  );
+  const normalize = (values: string[] = []) =>
+    [...new Set(values.map((value) => value.toLowerCase()))].sort();
+
+  if (
+    (distribution.defaultRootObject ?? "") !==
+      (desired.defaultRootObject ?? "index.html") ||
+    JSON.stringify(normalize(distribution.aliases)) !==
+      JSON.stringify(normalize(desired.aliases)) ||
+    (distribution.certificateArn ?? "") !==
+      (desired.certificateArn ?? "")
+  ) {
+    return {
+      healthy: false,
+      message: "CloudFront delivery configuration differs from desired state",
+    };
+  }
+
+  if (
+    desired.originId &&
+    distribution.originId &&
+    desired.originId !== distribution.originId
+  ) {
+    return {
+      healthy: false,
+      message: "CloudFront origin identity differs from desired state",
+    };
+  }
+
   return {
     healthy: distribution.status === "Deployed",
     message:
       distribution.status === "Deployed"
-        ? `CloudFront is deployed at ${distribution.domainName ?? distribution.id}`
+        ? `CloudFront matches desired state at ${distribution.domainName ?? distribution.id}`
         : `CloudFront distribution status is ${distribution.status ?? "unknown"}`,
   };
 }
