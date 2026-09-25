@@ -20,7 +20,14 @@ function desiredState(resource: Resource) {
   };
 }
 
-export function updateResource(resource: Resource): Resource {
+export interface UpdateResourceOptions {
+  forceDesiredStateChange?: boolean;
+}
+
+export function updateResource(
+  resource: Resource,
+  options: UpdateResourceOptions = {},
+): Resource {
   validateResource(resource);
 
   const existing = getStoredResource<Resource["spec"]>(resource.id);
@@ -29,10 +36,12 @@ export function updateResource(resource: Resource): Resource {
     throw new Error(`Resource "${resource.id}" not found`);
   }
 
-  const changed = !isDeepStrictEqual(
-    desiredState(existing as Resource),
-    desiredState(resource),
-  );
+  const changed =
+    options.forceDesiredStateChange === true ||
+    !isDeepStrictEqual(
+      desiredState(existing as Resource),
+      desiredState(resource),
+    );
 
   const updated: Resource = {
     ...resource,
