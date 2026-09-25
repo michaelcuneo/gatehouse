@@ -65,3 +65,16 @@ export function getAwsDiscoverySnapshot<T = unknown>(
     payload: JSON.parse(row.payload) as T,
   };
 }
+
+
+export function deleteAwsDiscoverySnapshot(
+  stageId: string,
+): boolean {
+  const db = getDatabase();
+
+  return (
+    db.prepare(
+      "DELETE FROM aws_discovery_snapshots WHERE stage_id = ?",
+    ).run(stageId).changes > 0
+  );
+}
