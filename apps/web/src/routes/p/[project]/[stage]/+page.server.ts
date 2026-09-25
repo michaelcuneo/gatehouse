@@ -260,5 +260,45 @@ export const actions: Actions = {
       success: true,
       action: 'updateStage'
     };
+  },
+
+  remove: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const attachedResources = listResourcesForStage(
+      context.stage.id
+    );
+
+    if (attachedResources.length) {
+      return fail(409, {
+        error:
+          'Remove or reassign all resources before deleting this stage.'
+      });
+    }
+
+    const form = await request.formData();
+    const confirmation = text(form, 'confirmation');
+
+    if (confirmation !== context.stage.name) {
+      return fail(400, {
+        error: 'Type the exact stage name to remove it.'
+      });
+    }
+
+    saveManagedProject({
+      ...context.project,
+      updatedAt: new Date().toISOString(),
+      stages: context.project.stages.filter(
+        (stage) => stage.id !== context.stage.id
+      )
+    });
+
+    throw redirect(303, '/projects');
   }
 };
