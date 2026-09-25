@@ -13,6 +13,7 @@ export interface ReconciliationSweepOptions {
   errorRetryMs?: number;
   unhealthyRetryMs?: number;
   deployOnChangeMs?: number;
+  staleReconcileMs?: number;
 }
 
 export interface ReconciliationSweepFailure {
@@ -24,21 +25,27 @@ export interface ReconciliationSweepFailure {
 export interface ReconciliationSweepResult {
   due: number;
   reconciled: number;
+  deferred: number;
   failed: ReconciliationSweepFailure[];
 }
 
 const DEFAULT_ERROR_RETRY_MS = 60_000;
 const DEFAULT_UNHEALTHY_RETRY_MS = 30_000;
 const DEFAULT_DEPLOY_ON_CHANGE_MS = 15_000;
+const DEFAULT_STALE_RECONCILE_MS = 5 * 60_000;
 
-function lastAttemptAt(resource: Resource): number | null {
-  const value =
-    resource.runtime?.lastReconciledAt ??
-    resource.updatedAt;
+function parsedTime(value: string | undefined): number | null {
+  if (!value) return null;
 
   const parsed = Date.parse(value);
-
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function lastAttemptAt(resource: Resource): number | null {
+  return (
+    parsedTime(resource.runtime?.lastReconciledAt) ??
+    parsedTime(resource.updatedAt)
+  );
 }
 
 function elapsedAtLeast(
@@ -51,18 +58,35 @@ function elapsedAtLeast(
   return last === null || now - last >= interval;
 }
 
+function reconciliationIsStale(
+  resource: Resource,
+  now: number,
+  interval: number,
+): boolean {
+  const updatedAt = parsedTime(resource.updatedAt);
+
+  return updatedAt === null || now - updatedAt >= interval;
+}
+
 function resourceIsDue(
   resource: Resource,
   now: number,
   options: Required<
     Pick<
       ReconciliationSweepOptions,
-      "errorRetryMs" | "unhealthyRetryMs" | "deployOnChangeMs"
+      | "errorRetryMs"
+      | "unhealthyRetryMs"
+      | "deployOnChangeMs"
+      | "staleReconcileMs"
     >
   >,
 ): boolean {
   if (resource.status === "reconciling") {
-    return false;
+    return reconciliationIsStale(
+      resource,
+      now,
+      options.staleReconcileMs,
+    );
   }
 
   if (resource.status === "pending") {
@@ -125,6 +149,35 @@ function planningFailure(
   };
 }
 
+function dependenciesReady(
+  plan: Resource[],
+  rootId: string,
+  dueIds: Set<string>,
+  processed: Map<string, "succeeded" | "failed">,
+): boolean {
+  for (const dependency of plan) {
+    if (dependency.id === rootId) break;
+
+    if (processed.get(dependency.id) === "failed") {
+      return false;
+    }
+
+    if (dueIds.has(dependency.id)) {
+      if (processed.get(dependency.id) !== "succeeded") {
+        return false;
+      }
+
+      continue;
+    }
+
+    if (dependency.status !== "ready") {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export async function reconcileDueResources(
   options: ReconciliationSweepOptions = {},
 ): Promise<ReconciliationSweepResult> {
@@ -142,6 +195,10 @@ export async function reconcileDueResources(
       options.deployOnChangeMs ?? DEFAULT_DEPLOY_ON_CHANGE_MS,
       1_000,
     ),
+    staleReconcileMs: Math.max(
+      options.staleReconcileMs ?? DEFAULT_STALE_RECONCILE_MS,
+      5_000,
+    ),
   };
 
   const resources = listResources();
@@ -152,6 +209,7 @@ export async function reconcileDueResources(
   const processed = new Map<string, "succeeded" | "failed">();
   const failed: ReconciliationSweepFailure[] = [];
   let reconciled = 0;
+  let deferred = 0;
 
   for (const root of due) {
     if (processed.get(root.id) === "succeeded") {
@@ -203,11 +261,38 @@ export async function reconcileDueResources(
         break;
       }
     }
+
+    if (
+      processed.get(root.id) !== "succeeded" &&
+      processed.get(root.id) !== "failed"
+    ) {
+      if (!dependenciesReady(plan, root.id, dueIds, processed)) {
+        deferred += 1;
+        continue;
+      }
+
+      try {
+        await reconcilePlannedResource(root);
+        processed.set(root.id, "succeeded");
+        reconciled += 1;
+      } catch (cause) {
+        const message =
+          cause instanceof Error ? cause.message : String(cause);
+
+        failed.push({
+          resourceId: root.id,
+          resourceName: root.name,
+          message,
+        });
+        processed.set(root.id, "failed");
+      }
+    }
   }
 
   return {
     due: due.length,
     reconciled,
+    deferred,
     failed,
   };
 }
