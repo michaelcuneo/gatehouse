@@ -417,6 +417,81 @@
             </div>
           {/if}
 
+        {:else if data.resource.kind === 'dynamodb_table'}
+          <div class="field">
+            <label>Table identity</label>
+            <input value={data.resource.spec.tableName} disabled />
+            <p class="muted">
+              Table name and primary-key schema are identity-bearing and cannot be changed in-place.
+            </p>
+          </div>
+
+          <div class="field">
+            <label>Region</label>
+            <input value={data.resource.spec.region} disabled />
+          </div>
+
+          <div class="field">
+            <label>Partition key</label>
+            <input
+              value={data.resource.spec.partitionKey.name + ' (' + data.resource.spec.partitionKey.type + ')'}
+              disabled
+            />
+          </div>
+
+          {#if data.resource.spec.sortKey}
+            <div class="field">
+              <label>Sort key</label>
+              <input
+                value={data.resource.spec.sortKey.name + ' (' + data.resource.spec.sortKey.type + ')'}
+                disabled
+              />
+            </div>
+          {/if}
+
+          <div class="field">
+            <label for="billingMode">Billing mode</label>
+            <select
+              id="billingMode"
+              name="billingMode"
+              value={data.resource.spec.billingMode}
+            >
+              <option value="PAY_PER_REQUEST">On-demand</option>
+              <option value="PROVISIONED">Provisioned</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="readCapacity">Read capacity</label>
+            <input
+              id="readCapacity"
+              name="readCapacity"
+              type="number"
+              min="1"
+              value={data.resource.spec.readCapacity ?? 1}
+            />
+          </div>
+
+          <div class="field">
+            <label for="writeCapacity">Write capacity</label>
+            <input
+              id="writeCapacity"
+              name="writeCapacity"
+              type="number"
+              min="1"
+              value={data.resource.spec.writeCapacity ?? 1}
+            />
+          </div>
+
+          <label class="check-field">
+            <input
+              name="deletionProtection"
+              type="checkbox"
+              checked={data.resource.spec.deletionProtection === true}
+            />
+            Enable deletion protection
+          </label>
+
         {:else if data.resource.kind === 'static_site'}
           <div class="field">
             <label for="buildDirectory">Build directory</label>
