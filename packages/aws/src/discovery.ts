@@ -87,12 +87,20 @@ function uniqueRegions(stage: ManagedStage): string[] {
 
 function normalisePhysicalId(value: string): string[] {
   const trimmed = value.trim();
+  const candidates = [
+    trimmed,
+    ...trimmed.split("|").map((part) => part.trim()).filter(Boolean),
+  ];
 
   return [
-    trimmed,
-    trimmed.replace(/\.$/, ""),
-    trimmed.toLowerCase(),
-    trimmed.replace(/\.$/, "").toLowerCase(),
+    ...new Set(
+      candidates.flatMap((candidate) => [
+        candidate,
+        candidate.replace(/\.$/, ""),
+        candidate.toLowerCase(),
+        candidate.replace(/\.$/, "").toLowerCase(),
+      ]),
+    ),
   ];
 }
 
