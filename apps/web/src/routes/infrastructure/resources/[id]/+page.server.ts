@@ -19,9 +19,13 @@ import {
   updateResource
 } from '@gatehouse/resources';
 import type {
+  CertificateSpec,
   DNSRecordType,
+  EndpointSpec,
   Resource,
-  ServiceRuntime
+  ServiceRuntime,
+  StaticSiteSpec,
+  StorageBucketSpec
 } from '@gatehouse/types';
 
 function text(form: FormData, key: string) {
@@ -160,10 +164,10 @@ export const load: PageServerLoad = async ({ params }) => {
     resource,
     stageIds: listStageIdsForResource(resource.id),
     stages: allStages(),
-    endpoints: listStoredResources('endpoint'),
-    storage: listStoredResources('storage_bucket'),
-    certificates: listStoredResources('certificate'),
-    staticSites: listStoredResources('static_site')
+    endpoints: listStoredResources<EndpointSpec>('endpoint'),
+    storage: listStoredResources<StorageBucketSpec>('storage_bucket'),
+    certificates: listStoredResources<CertificateSpec>('certificate'),
+    staticSites: listStoredResources<StaticSiteSpec>('static_site')
   };
 };
 
