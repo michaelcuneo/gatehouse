@@ -1,5 +1,6 @@
 import { ACMClient } from "@aws-sdk/client-acm";
 import { CloudFrontClient } from "@aws-sdk/client-cloudfront";
+import { CloudFormationClient } from "@aws-sdk/client-cloudformation";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -27,6 +28,7 @@ export function awsClientsForStage(
 
   return {
     acm: new ACMClient(config),
+    cloudFormation: new CloudFormationClient(config),
     cloudFront: new CloudFrontClient({
       ...config,
       region: "us-east-1",
