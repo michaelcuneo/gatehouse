@@ -9,6 +9,7 @@ export const RESOURCE_KINDS = {
   STORAGE_BUCKET: "storage_bucket",
   STATIC_SITE: "static_site",
   DATABASE_TABLE: "database_table",
+  FUNCTION: "function",
 } as const;
 
 export type ResourceKind = (typeof RESOURCE_KINDS)[keyof typeof RESOURCE_KINDS];
