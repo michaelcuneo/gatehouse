@@ -151,7 +151,9 @@ async function applyResource(
         lastError: undefined,
         lastStatusMessage: resource.enabled
           ? "Resource reconciled successfully"
-          : "Disabled resource removed from runtime",
+          : provider.destroy
+            ? "Disabled resource removed from runtime"
+            : "Resource disabled; provider intentionally retains the underlying resource",
         healthy: resource.enabled,
       },
       updatedAt: completedAt,
@@ -163,7 +165,9 @@ async function applyResource(
       success: true,
       message: resource.enabled
         ? `Reconciled with ${resource.provider}`
-        : `Removed disabled resource with ${resource.provider}`,
+        : provider.destroy
+          ? `Removed disabled resource with ${resource.provider}`
+          : `Disabled GateHouse control; ${resource.provider} retains the underlying resource`,
     });
   } catch (cause) {
     const failedAt = new Date().toISOString();
