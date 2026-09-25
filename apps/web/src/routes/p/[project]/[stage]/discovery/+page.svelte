@@ -8,6 +8,53 @@
   const observed = $derived(
     data.discovery.resources.filter((resource) => resource.ownership === 'observed')
   );
+
+  const supportsImport = (resource: (typeof data.discovery.resources)[number]) => {
+    if (
+      resource.service === 's3' &&
+      resource.resourceType === 'AWS::S3::Bucket'
+    ) {
+      const flags = [
+        resource.details?.blockPublicAcls === true,
+        resource.details?.ignorePublicAcls === true,
+        resource.details?.blockPublicPolicy === true,
+        resource.details?.restrictPublicBuckets === true
+      ];
+
+      return flags.every(Boolean) || flags.every((value) => !value);
+    }
+
+    if (
+      resource.service === 'acm' &&
+      resource.resourceType === 'AWS::CertificateManager::Certificate'
+    ) {
+      return Boolean(resource.arn && resource.details?.domains);
+    }
+
+    if (
+      resource.service === 'route53' &&
+      resource.resourceType === 'AWS::Route53::RecordSet'
+    ) {
+      return (
+        resource.details?.alias !== true &&
+        resource.details?.valueCount === 1 &&
+        ['A', 'AAAA', 'CNAME', 'TXT'].includes(String(resource.details?.type ?? '')) &&
+        typeof resource.details?.zone === 'string' &&
+        typeof resource.details?.value === 'string' &&
+        typeof resource.details?.ttl === 'number'
+      );
+    }
+
+    return false;
+  };
+
+  const importedFor = (discoveryId: string) =>
+    data.imported[discoveryId] ?? null;
+
+  const dryRunPassedFor = (resourceId: string) =>
+    form?.action === 'dryRun' &&
+    form?.resourceId === resourceId &&
+    form?.safeToAdopt === true;
 </script>
 
 <main class="container">
@@ -16,7 +63,7 @@
       <span class="eyebrow">{data.project.name} / {data.stage.name}</span>
       <h1>AWS discovery</h1>
       <p class="muted">
-        Read-only inventory. Nothing on this page is adopted or mutated by GateHouse.
+        Inventory is read-only until you explicitly import a resource and then promote it to GateHouse ownership.
       </p>
     </div>
 
@@ -31,10 +78,26 @@
     </div>
   </div>
 
-  <p class="muted mono">Last scanned {new Date(data.discovery.scannedAt).toLocaleString()}</p>
+  <p class="muted mono">
+    Last scanned {new Date(data.discovery.scannedAt).toLocaleString()}
+  </p>
 
   {#if form?.error}
     <p class="error mono">{form.error}</p>
+  {:else if form?.action === 'import' && form?.success}
+    <p class="muted mono">
+      Resource imported into GateHouse as read-only local desired state.
+    </p>
+  {:else if form?.action === 'dryRun' && form?.success}
+    <p class={form.safeToAdopt ? 'muted mono' : 'error mono'}>
+      {form.safeToAdopt
+        ? 'Dry run passed: live AWS state matches the imported GateHouse model.'
+        : 'Dry run did not match: GateHouse will not take control.'}
+    </p>
+  {:else if form?.action === 'takeControl' && form?.success}
+    <p class="muted mono">
+      GateHouse ownership enabled and reconciliation verified.
+    </p>
   {/if}
 
   <div class="metric-grid dashboard-metrics">
@@ -114,7 +177,7 @@
   <div class="section-head">
     <div>
       <span class="eyebrow">Estate inventory</span>
-      <h2>Discovered resources</h2>
+      <h2>Review and adopt</h2>
     </div>
   </div>
 
@@ -126,32 +189,92 @@
             <th>Resource</th>
             <th>Service</th>
             <th>Region</th>
-            <th>Ownership</th>
-            <th>Current owner</th>
+            <th>AWS ownership</th>
+            <th>GateHouse</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {#each data.discovery.resources as resource}
+            {@const imported = importedFor(resource.id)}
             <tr>
               <td>
                 <strong>{resource.name}</strong>
                 <div class="muted mono">{resource.resourceType}</div>
               </td>
+
               <td>{resource.service}</td>
               <td>{resource.region}</td>
+
               <td>
                 <span class={resource.ownership === 'external' ? 'status status-pending' : 'status status-ready'}>
                   {resource.ownership}
                 </span>
-              </td>
-              <td class="muted">
+
                 {#if resource.owner}
-                  {resource.owner.type}: {resource.owner.name}
+                  <div class="muted">
+                    {resource.owner.type}: {resource.owner.name}
+                  </div>
                   {#if resource.owner.logicalId}
-                    <div class="mono">{resource.owner.logicalId}</div>
+                    <div class="muted mono">{resource.owner.logicalId}</div>
+                  {/if}
+                {/if}
+              </td>
+
+              <td>
+                {#if imported}
+                  <a href={'/infrastructure/resources/' + imported.id}>
+                    <span class={imported.ownership === 'gatehouse' ? 'status status-ready' : 'status status-pending'}>
+                      {imported.ownership}
+                    </span>
+                  </a>
+
+                  {#if imported.healthy === true}
+                    <div class="muted">live state matches</div>
+                  {:else if imported.healthy === false}
+                    <div class="error">live state differs</div>
                   {/if}
                 {:else}
-                  No stack owner detected
+                  <span class="muted">Not imported</span>
+                {/if}
+              </td>
+
+              <td>
+                {#if !imported}
+                  {#if supportsImport(resource)}
+                    <form method="POST" action="?/import">
+                      <input type="hidden" name="discoveryId" value={resource.id} />
+                      <button class="pill" type="submit">
+                        Import read-only
+                      </button>
+                    </form>
+                  {:else}
+                    <span class="muted">Inventory only</span>
+                  {/if}
+                {:else if imported.ownership === 'external'}
+                  <span class="muted">
+                    Stack ownership must be transferred first
+                  </span>
+                {:else if imported.ownership === 'gatehouse'}
+                  <span class="muted">GateHouse controlled</span>
+                {:else}
+                  <div class="stage-row">
+                    <form method="POST" action="?/dryRun">
+                      <input type="hidden" name="resourceId" value={imported.id} />
+                      <button class="pill" type="submit">
+                        Dry run
+                      </button>
+                    </form>
+
+                    {#if dryRunPassedFor(imported.id)}
+                      <form method="POST" action="?/takeControl">
+                        <input type="hidden" name="resourceId" value={imported.id} />
+                        <button class="button" type="submit">
+                          Take control
+                        </button>
+                      </form>
+                    {/if}
+                  </div>
                 {/if}
               </td>
             </tr>
