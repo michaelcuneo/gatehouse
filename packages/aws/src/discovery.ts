@@ -285,6 +285,30 @@ async function discoverS3(
         config.BlockPublicPolicy &&
         config.RestrictPublicBuckets,
       );
+
+      resources.push(
+        discovered(
+          {
+            id: `s3:${bucket.Name}`,
+            service: "s3",
+            resourceType: "AWS::S3::Bucket",
+            name: bucket.Name,
+            physicalId: bucket.Name,
+            region,
+            details: {
+              createdAt: bucket.CreationDate?.toISOString() ?? null,
+              publicAccessBlocked,
+              blockPublicAcls: config?.BlockPublicAcls ?? false,
+              ignorePublicAcls: config?.IgnorePublicAcls ?? false,
+              blockPublicPolicy: config?.BlockPublicPolicy ?? false,
+              restrictPublicBuckets: config?.RestrictPublicBuckets ?? false,
+            },
+          },
+          ownership,
+        ),
+      );
+
+      continue;
     } catch (cause) {
       const name =
         cause && typeof cause === "object" && "name" in cause
@@ -310,6 +334,10 @@ async function discoverS3(
           details: {
             createdAt: bucket.CreationDate?.toISOString() ?? null,
             publicAccessBlocked,
+            blockPublicAcls: false,
+            ignorePublicAcls: false,
+            blockPublicPolicy: false,
+            restrictPublicBuckets: false,
           },
         },
         ownership,
