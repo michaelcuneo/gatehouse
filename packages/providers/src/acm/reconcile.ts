@@ -47,6 +47,11 @@ export async function reconcileAcmResource(
   context: ProviderContext,
 ): Promise<void> {
   const resolved = target(resource, context);
+
+  if (resolved.spec.certificateArn) {
+    return;
+  }
+
   const state = await ensureAcmCertificate(
     resolved.stage,
     resolved.spec,
