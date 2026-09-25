@@ -493,24 +493,34 @@
           </label>
 
         {:else if data.resource.kind === 'static_site'}
-          <div class="field">
-            <label for="buildDirectory">Build directory</label>
-            <input
-              id="buildDirectory"
-              name="buildDirectory"
-              value={data.resource.spec.buildDirectory}
-              required
-            />
-          </div>
+          {#if data.resource.spec.contentMode === 'external'}
+            <div class="field">
+              <label>Content management</label>
+              <input value="External content retained" disabled />
+              <p class="muted">
+                GateHouse manages delivery configuration only. Existing S3 objects and bucket access remain untouched.
+              </p>
+            </div>
+          {:else}
+            <div class="field">
+              <label for="buildDirectory">Build directory</label>
+              <input
+                id="buildDirectory"
+                name="buildDirectory"
+                value={data.resource.spec.buildDirectory}
+                required
+              />
+            </div>
 
-          <label class="check-field">
-            <input
-              name="deployOnChange"
-              type="checkbox"
-              checked={data.resource.spec.deployOnChange === true}
-            />
-            Deploy automatically when build output changes
-          </label>
+            <label class="check-field">
+              <input
+                name="deployOnChange"
+                type="checkbox"
+                checked={data.resource.spec.deployOnChange === true}
+              />
+              Deploy automatically when build output changes
+            </label>
+          {/if}
 
           {#if data.resource.provider === 'filesystem'}
             <div class="field">
