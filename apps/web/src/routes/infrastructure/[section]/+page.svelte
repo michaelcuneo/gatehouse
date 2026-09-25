@@ -67,7 +67,7 @@
     {/if}
   </section>
 
-  {#if data.section.kind === 'certificate' || data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'static_site'}
+  {#if data.section.kind === 'certificate' || data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'database_table' || data.section.kind === 'static_site'}
     <div class="section-head">
       <div>
         <span class="eyebrow">Desired state</span>
@@ -80,7 +80,9 @@
               ? 'Create managed service'
               : data.section.kind === 'storage_bucket'
                 ? 'Create storage'
-                : 'Create static deployment'}
+                : data.section.kind === 'database_table'
+                  ? 'Create DynamoDB table'
+                  : 'Create static deployment'}
         </h2>
       </div>
     </div>
