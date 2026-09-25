@@ -8,6 +8,7 @@ export const RESOURCE_KINDS = {
   DNS_RECORD: "dns_record",
   STORAGE_BUCKET: "storage_bucket",
   STATIC_SITE: "static_site",
+  DYNAMODB_TABLE: "dynamodb_table",
 } as const;
 
 export type ResourceKind = (typeof RESOURCE_KINDS)[keyof typeof RESOURCE_KINDS];
