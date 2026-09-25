@@ -49,6 +49,80 @@
     </section>
   {/if}
 
+  {#if form?.action === 'addStage' && form?.success}
+    <p class="muted mono">
+      Added stage {form.stageName}.
+    </p>
+  {:else if form?.action === 'registerProject' && form?.success}
+    <p class="muted mono">Project registered.</p>
+  {/if}
+
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Project stages</span>
+      <h2>Add stage</h2>
+    </div>
+  </div>
+
+  <section class="panel">
+    {#if form?.error}
+      <p class="error">{form.error}</p>
+    {/if}
+
+    <form method="POST" action="?/addStage">
+      <div class="form-grid">
+        <div class="field">
+          <label for="projectId">Project</label>
+          <select id="projectId" name="projectId" required>
+            <option value="">Select project</option>
+            {#each data.projects as project}
+              <option value={project.id}>{project.name}</option>
+            {/each}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="stageName">Stage name</label>
+          <input id="stageName" name="stageName" placeholder="staging" required />
+        </div>
+
+        <div class="field">
+          <label for="stageAccountId">AWS account ID</label>
+          <input
+            id="stageAccountId"
+            name="stageAccountId"
+            inputmode="numeric"
+            placeholder="123456789012"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label for="stageRegion">Primary region</label>
+          <input
+            id="stageRegion"
+            name="stageRegion"
+            value="ap-southeast-2"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label for="stageRoleArn">Assume-role ARN</label>
+          <input
+            id="stageRoleArn"
+            name="stageRoleArn"
+            placeholder="Optional for runtime credentials"
+          />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="button" type="submit">Add verified stage</button>
+      </div>
+    </form>
+  </section>
+
   <div class="section-head">
     <div>
       <span class="eyebrow">Project registry</span>
