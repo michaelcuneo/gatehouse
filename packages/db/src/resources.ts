@@ -13,7 +13,8 @@ export type StoredResourceKind =
   | "certificate"
   | "dns_record"
   | "storage_bucket"
-  | "static_site";
+  | "static_site"
+  | "dynamodb_table";
 
 export interface StoredResourceMetadata {
   description?: string;
