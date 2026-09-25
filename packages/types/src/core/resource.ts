@@ -65,6 +65,15 @@ export interface BaseResource<TKind extends ResourceKind, TSpec> {
 
     ownership?: ResourceOwnership;
 
+    importedFrom?: {
+      provider: "aws";
+      discoveryId: string;
+      physicalId: string;
+      accountId: string;
+      region: string;
+      importedAt: Timestamp;
+    };
+
     dependsOn?: ResourceId[];
   };
 
