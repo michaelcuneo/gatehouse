@@ -49,6 +49,11 @@ const sections: Record<
     kind: 'database_table',
     title: 'DynamoDB',
     description: 'AWS DynamoDB tables with safe primary-key and capacity management.'
+  },
+  functions: {
+    kind: 'function',
+    title: 'Functions',
+    description: 'Imported AWS Lambda functions with GateHouse-managed runtime configuration and external code packages.'
   }
 };
 
