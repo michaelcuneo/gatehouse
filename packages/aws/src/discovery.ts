@@ -558,6 +558,11 @@ async function discoverCloudFront(
     for (const distribution of list?.Items ?? []) {
       if (!distribution.Id) continue;
 
+      const origins = distribution.Origins?.Items ?? [];
+      const origin = origins[0];
+      const defaultBehavior = distribution.DefaultCacheBehavior;
+      const aliases = distribution.Aliases?.Items ?? [];
+
       resources.push(
         discovered(
           {
@@ -565,7 +570,7 @@ async function discoverCloudFront(
             service: "cloudfront",
             resourceType: "AWS::CloudFront::Distribution",
             name:
-              distribution.Aliases?.Items?.[0] ??
+              aliases[0] ??
               distribution.DomainName ??
               distribution.Id,
             physicalId: distribution.Id,
@@ -574,6 +579,24 @@ async function discoverCloudFront(
               enabled: distribution.Enabled ?? false,
               status: distribution.Status ?? "Unknown",
               domainName: distribution.DomainName ?? null,
+              defaultRootObject:
+                distribution.DefaultRootObject ?? "",
+              aliases: JSON.stringify(aliases),
+              certificateArn:
+                distribution.ViewerCertificate?.ACMCertificateArn ?? null,
+              originCount: origins.length,
+              originId: origin?.Id ?? null,
+              originDomainName: origin?.DomainName ?? null,
+              originPath: origin?.OriginPath ?? "",
+              originIsS3: Boolean(origin?.S3OriginConfig),
+              defaultTargetOriginId:
+                defaultBehavior?.TargetOriginId ?? null,
+              lambdaAssociations:
+                defaultBehavior?.LambdaFunctionAssociations?.Quantity ?? 0,
+              functionAssociations:
+                defaultBehavior?.FunctionAssociations?.Quantity ?? 0,
+              cacheBehaviors:
+                distribution.CacheBehaviors?.Quantity ?? 0,
             },
           },
           ownership,
