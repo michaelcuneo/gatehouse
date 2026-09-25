@@ -99,7 +99,10 @@ async function applyResource(
         message: `Deploying with ${resource.provider}`,
       }).id;
 
-      if (resource.kind === "static_site") {
+      if (
+        resource.kind === "static_site" &&
+        resource.spec.contentMode !== "external"
+      ) {
         artifactFingerprint = await fingerprintStaticSiteBuild(resource);
 
         const previous = getLatestSuccessfulDeployment(resource.id);
