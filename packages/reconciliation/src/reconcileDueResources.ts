@@ -1,10 +1,12 @@
 import {
+  getLatestSuccessfulDeployment,
   updateResourceState,
   writeAuditLog,
 } from "@gatehouse/db";
 import { listResources } from "@gatehouse/resources";
 import type { Resource } from "@gatehouse/types";
 
+import { fingerprintStaticSiteBuild } from "./artifactFingerprint";
 import { planReconciliation } from "./planReconciliation";
 import { reconcilePlannedResource } from "./reconcileResource";
 
@@ -117,6 +119,22 @@ function resourceIsDue(
   );
 }
 
+async function artifactChangeIsDue(
+  resource: Resource,
+): Promise<boolean> {
+  if (
+    resource.kind !== "static_site" ||
+    resource.spec.deployOnChange !== true
+  ) {
+    return true;
+  }
+
+  const fingerprint = await fingerprintStaticSiteBuild(resource);
+  const previous = getLatestSuccessfulDeployment(resource.id);
+
+  return previous?.artifactFingerprint !== fingerprint;
+}
+
 function planningFailure(
   resource: Resource,
   cause: unknown,
@@ -202,12 +220,38 @@ export async function reconcileDueResources(
   };
 
   const resources = listResources();
-  const due = resources.filter((resource) =>
-    resourceIsDue(resource, now, timing),
-  );
+  const failedDuringDiscovery: ReconciliationSweepFailure[] = [];
+  const due: Resource[] = [];
+
+  for (const resource of resources) {
+    if (!resourceIsDue(resource, now, timing)) {
+      continue;
+    }
+
+    const isRoutineArtifactCheck =
+      resource.status === "ready" &&
+      resource.runtime?.healthy !== false &&
+      resource.kind === "static_site" &&
+      resource.spec.deployOnChange === true;
+
+    if (isRoutineArtifactCheck) {
+      try {
+        if (!(await artifactChangeIsDue(resource))) {
+          continue;
+        }
+      } catch (cause) {
+        failedDuringDiscovery.push(planningFailure(resource, cause));
+        continue;
+      }
+    }
+
+    due.push(resource);
+  }
   const dueIds = new Set(due.map((resource) => resource.id));
   const processed = new Map<string, "succeeded" | "failed">();
-  const failed: ReconciliationSweepFailure[] = [];
+  const failed: ReconciliationSweepFailure[] = [
+    ...failedDuringDiscovery,
+  ];
   let reconciled = 0;
   let deferred = 0;
 
@@ -244,6 +288,14 @@ export async function reconcileDueResources(
         continue;
       }
 
+      if (
+        resource.id === root.id &&
+        !dependenciesReady(plan, root.id, dueIds, processed)
+      ) {
+        deferred += 1;
+        break;
+      }
+
       try {
         await reconcilePlannedResource(resource);
         processed.set(resource.id, "succeeded");
@@ -262,31 +314,6 @@ export async function reconcileDueResources(
       }
     }
 
-    if (
-      processed.get(root.id) !== "succeeded" &&
-      processed.get(root.id) !== "failed"
-    ) {
-      if (!dependenciesReady(plan, root.id, dueIds, processed)) {
-        deferred += 1;
-        continue;
-      }
-
-      try {
-        await reconcilePlannedResource(root);
-        processed.set(root.id, "succeeded");
-        reconciled += 1;
-      } catch (cause) {
-        const message =
-          cause instanceof Error ? cause.message : String(cause);
-
-        failed.push({
-          resourceId: root.id,
-          resourceName: root.name,
-          message,
-        });
-        processed.set(root.id, "failed");
-      }
-    }
   }
 
   return {
