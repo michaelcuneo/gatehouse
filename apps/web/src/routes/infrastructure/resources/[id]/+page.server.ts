@@ -466,6 +466,43 @@ export const actions: Actions = {
           break;
         }
 
+        case 'function': {
+          const memorySize = integer(form, 'memorySize', {
+            min: 128,
+            max: 10240
+          });
+          const timeout = integer(form, 'timeout', {
+            min: 1,
+            max: 900
+          });
+          const architecture = text(form, 'architecture');
+          const runtime = text(form, 'runtime');
+          const handler = text(form, 'handler');
+
+          if (
+            memorySize === null ||
+            timeout === null ||
+            !['x86_64', 'arm64'].includes(architecture)
+          ) {
+            return fail(400, {
+              error: 'Lambda memory, timeout and architecture are invalid.'
+            });
+          }
+
+          updated = {
+            ...updated,
+            spec: {
+              ...resource.spec,
+              runtime: runtime || undefined,
+              handler: handler || undefined,
+              memorySize,
+              timeout,
+              architecture: architecture as 'x86_64' | 'arm64'
+            }
+          } as Resource;
+          break;
+        }
+
         case 'static_site': {
           const externalContent =
             resource.spec.contentMode === 'external';
