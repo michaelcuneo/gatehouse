@@ -417,7 +417,7 @@
             </div>
           {/if}
 
-        {:else if data.resource.kind === 'dynamodb_table'}
+        {:else if data.resource.kind === 'database_table'}
           <div class="field">
             <label>Table identity</label>
             <input value={data.resource.spec.tableName} disabled />
