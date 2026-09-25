@@ -373,11 +373,22 @@ export async function ensureGateHouseDistribution(
       }),
     );
 
+    const updatedConfig = updated.Distribution?.DistributionConfig;
+
     return {
       id: existing.id,
       domainName: updated.Distribution?.DomainName ?? existing.domainName,
       status: updated.Distribution?.Status ?? existing.status,
-      enabled: true,
+      enabled: updatedConfig?.Enabled ?? true,
+      defaultRootObject: updatedConfig?.DefaultRootObject,
+      aliases: updatedConfig?.Aliases?.Items ?? [],
+      certificateArn:
+        updatedConfig?.ViewerCertificate?.ACMCertificateArn,
+      originId: updatedConfig?.Origins?.Items?.[0]?.Id,
+      originDomainName:
+        updatedConfig?.Origins?.Items?.[0]?.DomainName,
+      originPath:
+        updatedConfig?.Origins?.Items?.[0]?.OriginPath,
     };
   }
 
@@ -465,6 +476,18 @@ export async function ensureGateHouseDistribution(
     domainName: distribution.DomainName,
     status: distribution.Status,
     enabled: distribution.DistributionConfig?.Enabled ?? true,
+    defaultRootObject:
+      distribution.DistributionConfig?.DefaultRootObject,
+    aliases:
+      distribution.DistributionConfig?.Aliases?.Items ?? [],
+    certificateArn:
+      distribution.DistributionConfig?.ViewerCertificate?.ACMCertificateArn,
+    originId:
+      distribution.DistributionConfig?.Origins?.Items?.[0]?.Id,
+    originDomainName:
+      distribution.DistributionConfig?.Origins?.Items?.[0]?.DomainName,
+    originPath:
+      distribution.DistributionConfig?.Origins?.Items?.[0]?.OriginPath,
   };
 }
 
@@ -551,6 +574,18 @@ export async function findGateHouseDistributionByResource(
             status: result.Distribution.Status,
             enabled:
               result.Distribution.DistributionConfig?.Enabled ?? false,
+            defaultRootObject:
+              result.Distribution.DistributionConfig?.DefaultRootObject,
+            aliases:
+              result.Distribution.DistributionConfig?.Aliases?.Items ?? [],
+            certificateArn:
+              result.Distribution.DistributionConfig?.ViewerCertificate?.ACMCertificateArn,
+            originId:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.Id,
+            originDomainName:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.DomainName,
+            originPath:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.OriginPath,
           }
         : null;
     } catch (cause) {
@@ -588,6 +623,12 @@ export async function findGateHouseDistributionByResource(
         domainName: match.DomainName,
         status: match.Status,
         enabled: match.Enabled ?? false,
+        defaultRootObject: match.DefaultRootObject,
+        aliases: match.Aliases?.Items ?? [],
+        certificateArn: match.ViewerCertificate?.ACMCertificateArn,
+        originId: match.Origins?.Items?.[0]?.Id,
+        originDomainName: match.Origins?.Items?.[0]?.DomainName,
+        originPath: match.Origins?.Items?.[0]?.OriginPath,
       };
     }
 
