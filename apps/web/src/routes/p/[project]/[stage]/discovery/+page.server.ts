@@ -221,6 +221,94 @@ function importableResource(
   }
 
   if (
+    discovered.service === 'dynamodb' &&
+    discovered.resourceType === 'AWS::DynamoDB::Table'
+  ) {
+    const partitionKey = stringDetail(discovered, 'partitionKey');
+    const partitionKeyType = stringDetail(
+      discovered,
+      'partitionKeyType'
+    );
+    const sortKey = stringDetail(discovered, 'sortKey');
+    const sortKeyType = stringDetail(discovered, 'sortKeyType');
+    const billingMode = stringDetail(discovered, 'billingMode');
+    const readCapacity = numberDetail(discovered, 'readCapacity');
+    const writeCapacity = numberDetail(discovered, 'writeCapacity');
+    const globalIndexes =
+      numberDetail(discovered, 'globalSecondaryIndexes') ?? 0;
+    const localIndexes =
+      numberDetail(discovered, 'localSecondaryIndexes') ?? 0;
+
+    if (globalIndexes || localIndexes) {
+      throw new Error(
+        'This DynamoDB table has secondary indexes. GateHouse will keep it inventory-only until index management is implemented.'
+      );
+    }
+
+    if (
+      !partitionKey ||
+      !['S', 'N', 'B'].includes(partitionKeyType ?? '') ||
+      (sortKey &&
+        !['S', 'N', 'B'].includes(sortKeyType ?? '')) ||
+      !['PAY_PER_REQUEST', 'PROVISIONED'].includes(
+        billingMode ?? ''
+      )
+    ) {
+      throw new Error(
+        'DynamoDB discovery did not return a primary-key schema GateHouse can represent safely.'
+      );
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      kind: 'dynamodb_table',
+      name: discovered.name,
+      provider: 'dynamodb',
+      version: 1,
+      enabled: true,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+      metadata,
+      runtime: {
+        lastStatusMessage:
+          discovered.ownership === 'external'
+            ? 'Imported from AWS discovery; externally managed'
+            : 'Imported from AWS discovery; observation only'
+      },
+      spec: {
+        tableName: discovered.physicalId,
+        region: discovered.region,
+        partitionKey: {
+          name: partitionKey,
+          type: partitionKeyType as 'S' | 'N' | 'B'
+        },
+        sortKey: sortKey
+          ? {
+              name: sortKey,
+              type: sortKeyType as 'S' | 'N' | 'B'
+            }
+          : undefined,
+        billingMode: billingMode as
+          | 'PAY_PER_REQUEST'
+          | 'PROVISIONED',
+        readCapacity:
+          billingMode === 'PROVISIONED'
+            ? readCapacity ?? 1
+            : undefined,
+        writeCapacity:
+          billingMode === 'PROVISIONED'
+            ? writeCapacity ?? 1
+            : undefined,
+        deletionProtection: booleanDetail(
+          discovered,
+          'deletionProtection'
+        )
+      }
+    };
+  }
+
+  if (
     discovered.service === 'acm' &&
     discovered.resourceType ===
       'AWS::CertificateManager::Certificate' &&
