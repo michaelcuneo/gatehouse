@@ -492,6 +492,83 @@
             Enable deletion protection
           </label>
 
+        {:else if data.resource.kind === 'function'}
+          <div class="field">
+            <label>Function identity</label>
+            <input value={data.resource.spec.functionName} disabled />
+            <p class="muted">
+              Function name, IAM role, environment, layers and code package remain external to GateHouse.
+            </p>
+          </div>
+
+          <div class="field">
+            <label>Region</label>
+            <input value={data.resource.spec.region} disabled />
+          </div>
+
+          <div class="field">
+            <label>Execution role</label>
+            <input value={data.resource.spec.roleArn ?? 'Unknown'} disabled />
+          </div>
+
+          <div class="field">
+            <label for="runtime">Runtime</label>
+            <input
+              id="runtime"
+              name="runtime"
+              value={data.resource.spec.runtime ?? ''}
+              placeholder="Not used by image-based functions"
+            />
+          </div>
+
+          <div class="field">
+            <label for="handler">Handler</label>
+            <input
+              id="handler"
+              name="handler"
+              value={data.resource.spec.handler ?? ''}
+              placeholder="Not used by image-based functions"
+            />
+          </div>
+
+          <div class="field">
+            <label for="memorySize">Memory (MB)</label>
+            <input
+              id="memorySize"
+              name="memorySize"
+              type="number"
+              min="128"
+              max="10240"
+              value={data.resource.spec.memorySize}
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="timeout">Timeout (seconds)</label>
+            <input
+              id="timeout"
+              name="timeout"
+              type="number"
+              min="1"
+              max="900"
+              value={data.resource.spec.timeout}
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="architecture">Architecture</label>
+            <select
+              id="architecture"
+              name="architecture"
+              value={data.resource.spec.architecture}
+            >
+              <option value="x86_64">x86_64</option>
+              <option value="arm64">arm64</option>
+            </select>
+          </div>
+
         {:else if data.resource.kind === 'static_site'}
           {#if data.resource.spec.contentMode === 'external'}
             <div class="field">
