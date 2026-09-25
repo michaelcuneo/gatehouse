@@ -19,6 +19,14 @@ export interface StoredResourceMetadata {
   description?: string;
   tags?: string[];
   managed?: boolean;
+  ownership?: {
+    mode: "gatehouse" | "external" | "observed";
+    externalOwner?: {
+      type: "cloudformation" | "sst" | "cdk" | "unknown";
+      id?: string;
+      name?: string;
+    };
+  };
   dependsOn?: string[];
 }
 
