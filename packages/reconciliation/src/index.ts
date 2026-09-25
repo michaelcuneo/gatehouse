@@ -7,3 +7,4 @@ export * from "./checkResourceHealth";
 export * from "./providerContext";
 export * from "./artifactFingerprint";
 export * from "./reconcileDueResources";
+export * from "./resourceDependencies";
