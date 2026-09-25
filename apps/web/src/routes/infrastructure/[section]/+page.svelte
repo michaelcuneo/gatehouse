@@ -386,7 +386,7 @@
                 Allow public access configuration
               </label>
             {/if}
-          {:else if data.section.kind === 'dynamodb_table'}
+          {:else if data.section.kind === 'database_table'}
             <div class="field">
               <label for="stageId">Project stage</label>
               <select id="stageId" name="stageId" required>
