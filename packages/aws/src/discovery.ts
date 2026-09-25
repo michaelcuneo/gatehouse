@@ -18,7 +18,10 @@ import {
 } from "@aws-sdk/client-acm";
 import { ListDistributionsCommand } from "@aws-sdk/client-cloudfront";
 import { ListFunctionsCommand } from "@aws-sdk/client-lambda";
-import { ListTablesCommand } from "@aws-sdk/client-dynamodb";
+import {
+  DescribeTableCommand,
+  ListTablesCommand,
+} from "@aws-sdk/client-dynamodb";
 
 import type { ManagedStage } from "@gatehouse/core";
 
@@ -647,6 +650,28 @@ async function discoverDynamoDb(
     );
 
     for (const tableName of result.TableNames ?? []) {
+      const described = await dynamoDB.send(
+        new DescribeTableCommand({
+          TableName: tableName,
+        }),
+      );
+      const table = described.Table;
+      const hash = table?.KeySchema?.find(
+        (entry) => entry.KeyType === "HASH",
+      );
+      const range = table?.KeySchema?.find(
+        (entry) => entry.KeyType === "RANGE",
+      );
+      const attributeType = (name?: string) =>
+        table?.AttributeDefinitions?.find(
+          (definition) => definition.AttributeName === name,
+        )?.AttributeType ?? null;
+      const billingMode =
+        table?.BillingModeSummary?.BillingMode ??
+        (table?.ProvisionedThroughput
+          ? "PROVISIONED"
+          : "PAY_PER_REQUEST");
+
       resources.push(
         discovered(
           {
@@ -655,7 +680,26 @@ async function discoverDynamoDb(
             resourceType: "AWS::DynamoDB::Table",
             name: tableName,
             physicalId: tableName,
+            arn: table?.TableArn,
             region,
+            details: {
+              status: table?.TableStatus ?? null,
+              partitionKey: hash?.AttributeName ?? null,
+              partitionKeyType: attributeType(hash?.AttributeName),
+              sortKey: range?.AttributeName ?? null,
+              sortKeyType: attributeType(range?.AttributeName),
+              billingMode,
+              readCapacity:
+                table?.ProvisionedThroughput?.ReadCapacityUnits ?? null,
+              writeCapacity:
+                table?.ProvisionedThroughput?.WriteCapacityUnits ?? null,
+              deletionProtection:
+                table?.DeletionProtectionEnabled ?? false,
+              globalSecondaryIndexes:
+                table?.GlobalSecondaryIndexes?.length ?? 0,
+              localSecondaryIndexes:
+                table?.LocalSecondaryIndexes?.length ?? 0,
+            },
           },
           ownership,
         ),
