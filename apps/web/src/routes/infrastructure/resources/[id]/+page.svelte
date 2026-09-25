@@ -11,6 +11,21 @@
   );
 
   const currentStageId = $derived(data.stageIds[0] ?? '');
+  const ownership = $derived(
+    data.resource.metadata?.ownership?.mode ??
+      (data.resource.metadata?.managed === false
+        ? 'external'
+        : 'gatehouse')
+  );
+  const destroyAvailable = $derived(
+    ownership === 'gatehouse' &&
+    data.resource.provider !== 'dynamodb' &&
+    data.resource.provider !== 'lambda' &&
+    !(
+      data.resource.kind === 'static_site' &&
+      data.resource.spec.contentMode === 'external'
+    )
+  );
   const staticSiteStorageId = $derived(
     data.resource.kind === 'static_site'
       ? data.resource.spec.storageId
@@ -681,6 +696,69 @@
         <button class="button" type="submit">Save desired state</button>
       </div>
     </form>
+  </section>
+
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Lifecycle</span>
+      <h2>Ownership and removal</h2>
+    </div>
+  </div>
+
+  <section class="panel">
+    <dl class="detail-list">
+      <div><dt>Ownership</dt><dd class="mono">{ownership}</dd></div>
+    </dl>
+
+    {#if ownership === 'gatehouse'}
+      <p class="muted">
+        Relinquish stops GateHouse mutation but keeps this resource in the local inventory.
+      </p>
+
+      <form method="POST" action="?/relinquish">
+        <button class="pill" type="submit">Relinquish control</button>
+      </form>
+
+      {#if destroyAvailable}
+        <div class="field">
+          <p class="muted">
+            Destroy removes the underlying managed infrastructure and then removes the GateHouse record.
+            Type the exact resource name to confirm.
+          </p>
+        </div>
+
+        <form method="POST" action="?/destroy">
+          <div class="field">
+            <input
+              name="confirmation"
+              placeholder={data.resource.name}
+              autocomplete="off"
+            />
+          </div>
+          <button class="button" type="submit">Destroy resource</button>
+        </form>
+      {:else}
+        <p class="muted">
+          This provider/resource has no destructive workflow. Relinquish control instead.
+        </p>
+      {/if}
+    {:else}
+      <p class="muted">
+        GateHouse is not controlling this resource. Forget removes only the local GateHouse record and does not touch infrastructure.
+        Type the exact resource name to confirm.
+      </p>
+
+      <form method="POST" action="?/forget">
+        <div class="field">
+          <input
+            name="confirmation"
+            placeholder={data.resource.name}
+            autocomplete="off"
+          />
+        </div>
+        <button class="pill" type="submit">Forget local record</button>
+      </form>
+    {/if}
   </section>
 
   <div class="detail-grid">
