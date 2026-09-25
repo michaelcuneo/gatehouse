@@ -5,18 +5,32 @@ import {
   reconcileAcmDnsValidation,
   type AcmCertificateSpec,
 } from "@gatehouse/aws";
-import type { Resource } from "@gatehouse/types";
+import type {
+  AwsAcmCertificateSpec,
+  CertificateResource,
+  Resource,
+} from "@gatehouse/types";
 import type { ProviderContext } from "../types";
 
 import { validateAcmResource } from "./validate";
 
+type AwsAcmCertificateResource = CertificateResource & {
+  spec: AwsAcmCertificateSpec;
+};
+
+function isAwsAcmCertificateResource(
+  resource: Resource,
+): resource is AwsAcmCertificateResource {
+  return (
+    resource.kind === "certificate" &&
+    resource.spec.provider === "aws_acm"
+  );
+}
+
 function target(resource: Resource, context: ProviderContext) {
   validateAcmResource(resource, context);
 
-  if (
-    resource.kind !== "certificate" ||
-    resource.spec.provider !== "aws_acm"
-  ) {
+  if (!isAwsAcmCertificateResource(resource)) {
     throw new Error("ACM provider requires an AWS ACM certificate resource");
   }
 
@@ -28,8 +42,8 @@ function target(resource: Resource, context: ProviderContext) {
 
   const spec: AcmCertificateSpec = {
     resourceId: resource.id,
-    domains: resolved.resource.spec.domains,
-    wildcard: resolved.resource.spec.wildcard,
+    domains: resource.spec.domains,
+    wildcard: resource.spec.wildcard,
     region: resource.spec.region ?? "us-east-1",
     certificateArn: resource.spec.certificateArn,
     validation: resource.spec.validation ?? "dns",
@@ -105,9 +119,9 @@ export async function healthAcmResource(
     };
   }
 
-  const desiredDomains = new Set(
+  const desiredDomains = new Set<string>(
     resolved.resource.spec.domains
-      .map((domain) => domain.trim().toLowerCase())
+      .map((domain: string) => domain.trim().toLowerCase())
       .filter(Boolean),
   );
 
@@ -121,11 +135,13 @@ export async function healthAcmResource(
     }
   }
 
-  const actualDomains = new Set(state.domains);
+  const actualDomains = new Set<string>(state.domains);
 
   if (
     desiredDomains.size !== actualDomains.size ||
-    [...desiredDomains].some((domain) => !actualDomains.has(domain))
+    [...desiredDomains].some(
+      (domain: string) => !actualDomains.has(domain),
+    )
   ) {
     return {
       healthy: false,
