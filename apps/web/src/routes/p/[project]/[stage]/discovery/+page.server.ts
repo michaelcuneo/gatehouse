@@ -3,15 +3,32 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   discoverAwsStage,
+  type AwsDiscoveredResource,
   type AwsStageDiscovery
 } from '@gatehouse/aws';
 import {
+  attachResourceToStage,
   getAwsDiscoverySnapshot,
   getManagedStage,
+  listStageIdsForResource,
   saveAwsDiscoverySnapshot
 } from '@gatehouse/db';
+import {
+  checkResourceHealth,
+  reconcileResource
+} from '@gatehouse/reconciliation';
+import {
+  createResource,
+  getResource,
+  listResources,
+  updateResource
+} from '@gatehouse/resources';
+import type { Resource } from '@gatehouse/types';
 
-async function scan(stageId: string, stage: Parameters<typeof discoverAwsStage>[0]) {
+async function scan(
+  stageId: string,
+  stage: Parameters<typeof discoverAwsStage>[0]
+) {
   const discovery = await discoverAwsStage(stage);
 
   saveAwsDiscoverySnapshot(
@@ -23,12 +40,266 @@ async function scan(stageId: string, stage: Parameters<typeof discoverAwsStage>[
   return discovery;
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+function discoverySnapshot(stageId: string) {
+  return getAwsDiscoverySnapshot<AwsStageDiscovery>(stageId)?.payload ?? null;
+}
+
+function discoveredResource(
+  stageId: string,
+  discoveryId: string
+): AwsDiscoveredResource | null {
+  return (
+    discoverySnapshot(stageId)?.resources.find(
+      (resource) => resource.id === discoveryId
+    ) ?? null
+  );
+}
+
+function importedResource(discoveryId: string) {
+  return (
+    listResources().find(
+      (resource) =>
+        resource.metadata?.importedFrom?.provider === 'aws' &&
+        resource.metadata.importedFrom.discoveryId === discoveryId
+    ) ?? null
+  );
+}
+
+function booleanDetail(
+  resource: AwsDiscoveredResource,
+  key: string
+) {
+  return resource.details?.[key] === true;
+}
+
+function stringDetail(
+  resource: AwsDiscoveredResource,
+  key: string
+) {
+  const value = resource.details?.[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function numberDetail(
+  resource: AwsDiscoveredResource,
+  key: string
+) {
+  const value = resource.details?.[key];
+  return typeof value === 'number' ? value : null;
+}
+
+function importableResource(
+  discovered: AwsDiscoveredResource,
+  accountId: string
+): Resource {
+  const now = new Date().toISOString();
+  const ownership =
+    discovered.ownership === 'external'
+      ? {
+          mode: 'external' as const,
+          externalOwner: discovered.owner
+            ? {
+                type: discovered.owner.type,
+                id: discovered.owner.id,
+                name: discovered.owner.name
+              }
+            : undefined
+        }
+      : {
+          mode: 'observed' as const
+        };
+
+  const metadata = {
+    managed: false,
+    ownership,
+    importedFrom: {
+      provider: 'aws' as const,
+      discoveryId: discovered.id,
+      physicalId: discovered.physicalId,
+      accountId,
+      region: discovered.region,
+      importedAt: now
+    }
+  };
+
+  if (
+    discovered.service === 's3' &&
+    discovered.resourceType === 'AWS::S3::Bucket'
+  ) {
+    const flags = [
+      booleanDetail(discovered, 'blockPublicAcls'),
+      booleanDetail(discovered, 'ignorePublicAcls'),
+      booleanDetail(discovered, 'blockPublicPolicy'),
+      booleanDetail(discovered, 'restrictPublicBuckets')
+    ];
+
+    const allBlocked = flags.every(Boolean);
+    const allOpen = flags.every((value) => !value);
+
+    if (!allBlocked && !allOpen) {
+      throw new Error(
+        'This S3 bucket uses mixed Public Access Block settings that GateHouse cannot reproduce exactly yet.'
+      );
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      kind: 'storage_bucket',
+      name: discovered.name,
+      provider: 's3',
+      version: 1,
+      enabled: true,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+      metadata,
+      runtime: {
+        lastStatusMessage:
+          discovered.ownership === 'external'
+            ? 'Imported from AWS discovery; externally managed'
+            : 'Imported from AWS discovery; observation only'
+      },
+      spec: {
+        provider: 's3',
+        bucket: discovered.physicalId,
+        region: discovered.region,
+        public: allOpen
+      }
+    };
+  }
+
+  if (
+    discovered.service === 'route53' &&
+    discovered.resourceType === 'AWS::Route53::RecordSet'
+  ) {
+    const type = stringDetail(discovered, 'type');
+    const zone = stringDetail(discovered, 'zone');
+    const value = stringDetail(discovered, 'value');
+    const ttl = numberDetail(discovered, 'ttl');
+    const alias = booleanDetail(discovered, 'alias');
+    const valueCount = numberDetail(discovered, 'valueCount');
+
+    if (
+      alias ||
+      valueCount !== 1 ||
+      !zone ||
+      !value ||
+      ttl === null ||
+      !['A', 'AAAA', 'CNAME', 'TXT'].includes(type ?? '')
+    ) {
+      throw new Error(
+        'This Route53 record is not yet representable as a GateHouse value record.'
+      );
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      kind: 'dns_record',
+      name: discovered.name.replace(/\.$/, ''),
+      provider: 'route53',
+      version: 1,
+      enabled: true,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+      metadata,
+      runtime: {
+        lastStatusMessage:
+          discovered.ownership === 'external'
+            ? 'Imported from AWS discovery; externally managed'
+            : 'Imported from AWS discovery; observation only'
+      },
+      spec: {
+        mode: 'value',
+        zone,
+        name: discovered.name.replace(/\.$/, ''),
+        type: type as 'A' | 'AAAA' | 'CNAME' | 'TXT',
+        value,
+        ttl
+      }
+    };
+  }
+
+  if (
+    discovered.service === 'acm' &&
+    discovered.resourceType ===
+      'AWS::CertificateManager::Certificate' &&
+    discovered.arn
+  ) {
+    const domainsJson = stringDetail(discovered, 'domains');
+    const validation = stringDetail(discovered, 'validation');
+    let domains: string[] = [];
+
+    try {
+      const parsed = domainsJson ? JSON.parse(domainsJson) : [];
+      domains = Array.isArray(parsed)
+        ? parsed.filter(
+            (domain): domain is string =>
+              typeof domain === 'string' && Boolean(domain.trim())
+          )
+        : [];
+    } catch {
+      domains = [];
+    }
+
+    if (!domains.length) {
+      throw new Error(
+        'ACM discovery did not return enough domain information to import this certificate safely.'
+      );
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      kind: 'certificate',
+      name: discovered.name,
+      provider: 'acm',
+      version: 1,
+      enabled: true,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+      metadata,
+      runtime: {
+        lastStatusMessage:
+          discovered.ownership === 'external'
+            ? 'Imported from AWS discovery; externally managed'
+            : 'Imported from AWS discovery; observation only'
+      },
+      spec: {
+        provider: 'aws_acm',
+        domains,
+        autoRenew: true,
+        region: discovered.region,
+        certificateArn: discovered.arn,
+        validation: validation === 'email' ? 'email' : 'dns'
+      }
+    };
+  }
+
+  throw new Error(
+    'GateHouse can inventory this AWS resource, but it does not have a safe adoption model for it yet.'
+  );
+}
+
+function requireStage(params: { project: string; stage: string }) {
   const context = getManagedStage(params.project, params.stage);
 
   if (!context) {
     throw error(404, 'Managed project stage not found.');
   }
+
+  return context;
+}
+
+function resourceBelongsToStage(
+  resourceId: string,
+  stageId: string
+) {
+  return listStageIdsForResource(resourceId).includes(stageId);
+}
+
+export const load: PageServerLoad = async ({ params }) => {
+  const context = requireStage(params);
 
   const snapshot =
     getAwsDiscoverySnapshot<AwsStageDiscovery>(context.stage.id);
@@ -37,9 +308,33 @@ export const load: PageServerLoad = async ({ params }) => {
     snapshot?.payload ??
     await scan(context.stage.id, context.stage);
 
+  const imported = Object.fromEntries(
+    listResources()
+      .filter(
+        (resource) =>
+          resource.metadata?.importedFrom?.provider === 'aws' &&
+          resource.metadata.importedFrom.accountId === context.stage.accountId
+      )
+      .map((resource) => [
+        resource.metadata!.importedFrom!.discoveryId,
+        {
+          id: resource.id,
+          kind: resource.kind,
+          ownership:
+            resource.metadata?.ownership?.mode ??
+            (resource.metadata?.managed === false
+              ? 'external'
+              : 'gatehouse'),
+          healthy: resource.runtime?.healthy ?? null,
+          status: resource.status
+        }
+      ])
+  );
+
   return {
     ...context,
-    discovery
+    discovery,
+    imported
   };
 };
 
@@ -61,7 +356,203 @@ export const actions: Actions = {
 
       return {
         success: true,
+        action: 'refresh',
         scannedAt: discovery.scannedAt
+      };
+    } catch (cause) {
+      return fail(500, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
+  },
+
+  import: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const discoveryId = String(
+      form.get('discoveryId') ?? ''
+    ).trim();
+
+    if (!discoveryId) {
+      return fail(400, {
+        error: 'A discovered AWS resource is required.'
+      });
+    }
+
+    const discovered = discoveredResource(
+      context.stage.id,
+      discoveryId
+    );
+
+    if (!discovered) {
+      return fail(404, {
+        error:
+          'That resource is not present in the saved AWS discovery snapshot. Refresh discovery first.'
+      });
+    }
+
+    const existing = importedResource(discoveryId);
+
+    if (existing) {
+      return fail(409, {
+        error: 'That AWS resource has already been imported.'
+      });
+    }
+
+    try {
+      const resource = importableResource(
+        discovered,
+        context.stage.accountId
+      );
+
+      createResource(resource);
+      attachResourceToStage(context.stage.id, resource.id);
+
+      const healthy = await checkResourceHealth(resource.id);
+
+      return {
+        success: true,
+        action: 'import',
+        resourceId: resource.id,
+        healthy
+      };
+    } catch (cause) {
+      return fail(400, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
+  },
+
+  dryRun: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const resourceId = String(
+      form.get('resourceId') ?? ''
+    ).trim();
+    const resource = getResource(resourceId);
+
+    if (
+      !resource ||
+      !resourceBelongsToStage(resource.id, context.stage.id)
+    ) {
+      return fail(404, {
+        error: 'Imported GateHouse resource not found in this stage.'
+      });
+    }
+
+    if (resource.metadata?.ownership?.mode === 'external') {
+      return fail(409, {
+        error:
+          'This resource is still owned by CloudFormation, SST or CDK. Direct takeover is blocked.'
+      });
+    }
+
+    try {
+      const healthy = await checkResourceHealth(resource.id);
+
+      return {
+        success: true,
+        action: 'dryRun',
+        resourceId: resource.id,
+        safeToAdopt: healthy === true
+      };
+    } catch (cause) {
+      return fail(500, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
+  },
+
+  takeControl: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const resourceId = String(
+      form.get('resourceId') ?? ''
+    ).trim();
+    const resource = getResource(resourceId);
+
+    if (
+      !resource ||
+      !resourceBelongsToStage(resource.id, context.stage.id)
+    ) {
+      return fail(404, {
+        error: 'Imported GateHouse resource not found in this stage.'
+      });
+    }
+
+    const ownership = resource.metadata?.ownership?.mode;
+
+    if (ownership === 'external') {
+      return fail(409, {
+        error:
+          'Direct takeover is blocked while CloudFormation, SST or CDK owns this resource.'
+      });
+    }
+
+    if (ownership === 'gatehouse') {
+      return {
+        success: true,
+        action: 'takeControl',
+        resourceId: resource.id,
+        alreadyOwned: true
+      };
+    }
+
+    try {
+      const healthy = await checkResourceHealth(resource.id);
+
+      if (healthy !== true) {
+        return fail(409, {
+          error:
+            'Dry run does not match live AWS state. GateHouse will not take control until the desired state is exact.'
+        });
+      }
+
+      const controlled = updateResource({
+        ...resource,
+        metadata: {
+          ...(resource.metadata ?? {}),
+          managed: true,
+          ownership: {
+            mode: 'gatehouse'
+          }
+        }
+      });
+
+      await reconcileResource(controlled.id);
+
+      return {
+        success: true,
+        action: 'takeControl',
+        resourceId: controlled.id,
+        version: controlled.version
       };
     } catch (cause) {
       return fail(500, {
