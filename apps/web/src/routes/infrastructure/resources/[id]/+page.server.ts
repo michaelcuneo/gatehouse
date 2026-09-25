@@ -1,4 +1,4 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 import {
@@ -12,6 +12,9 @@ import {
 } from '@gatehouse/db';
 import {
   checkResourceHealth,
+  destroyResourceSafely,
+  forgetResource,
+  relinquishResource,
   reconcileResource
 } from '@gatehouse/reconciliation';
 import {
@@ -151,6 +154,28 @@ function commonUpdate(
       tags: resourceTags.length ? resourceTags : undefined
     }
   };
+}
+
+
+function sectionForResource(resource: Resource) {
+  switch (resource.kind) {
+    case 'service':
+      return 'services';
+    case 'certificate':
+      return 'certificates';
+    case 'dns_record':
+      return 'dns';
+    case 'storage_bucket':
+      return 'storage';
+    case 'static_site':
+      return 'static-sites';
+    case 'database_table':
+      return 'dynamodb';
+    case 'function':
+      return 'functions';
+    case 'endpoint':
+      return 'endpoints';
+  }
 }
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -647,6 +672,87 @@ export const actions: Actions = {
         error: cause instanceof Error ? cause.message : String(cause)
       });
     }
+  },
+
+  relinquish: async ({ params }) => {
+    const resource = getResource(params.id);
+
+    if (!resource) {
+      return fail(404, { error: 'GateHouse resource not found.' });
+    }
+
+    try {
+      await relinquishResource(resource.id);
+
+      return {
+        success: true,
+        action: 'relinquish'
+      };
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error ? cause.message : String(cause)
+      });
+    }
+  },
+
+  forget: async ({ params, request }) => {
+    const resource = getResource(params.id);
+
+    if (!resource) {
+      return fail(404, { error: 'GateHouse resource not found.' });
+    }
+
+    const form = await request.formData();
+    const confirmation = text(form, 'confirmation');
+
+    if (confirmation !== resource.name) {
+      return fail(400, {
+        error: 'Type the exact resource name to forget it.'
+      });
+    }
+
+    try {
+      await forgetResource(resource.id);
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error ? cause.message : String(cause)
+      });
+    }
+
+    throw redirect(
+      303,
+      `/infrastructure/${sectionForResource(resource)}`
+    );
+  },
+
+  destroy: async ({ params, request }) => {
+    const resource = getResource(params.id);
+
+    if (!resource) {
+      return fail(404, { error: 'GateHouse resource not found.' });
+    }
+
+    const form = await request.formData();
+    const confirmation = text(form, 'confirmation');
+
+    if (confirmation !== resource.name) {
+      return fail(400, {
+        error: 'Type the exact resource name to destroy it.'
+      });
+    }
+
+    try {
+      await destroyResourceSafely(resource.id);
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error ? cause.message : String(cause)
+      });
+    }
+
+    throw redirect(
+      303,
+      `/infrastructure/${sectionForResource(resource)}`
+    );
   },
 
   toggle: async ({ params }) => {
