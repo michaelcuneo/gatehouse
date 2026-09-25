@@ -9,3 +9,4 @@ export * from "./route53";
 export * from "./s3";
 export * from "./acm";
 export * from "./dynamodb";
+export * from "./lambda";
