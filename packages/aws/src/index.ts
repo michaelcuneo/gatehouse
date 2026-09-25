@@ -7,3 +7,4 @@ export * from "./cloudfront";
 export * from "./acm";
 export * from "./discovery";
 export * from "./dynamodb";
+export * from "./lambda";
