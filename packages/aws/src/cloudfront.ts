@@ -19,6 +19,8 @@ export interface CloudFrontStaticSiteSpec {
   bucketRegion: string;
   prefix?: string;
   distributionId?: string;
+  originId?: string;
+  manageOrigin?: boolean;
   defaultRootObject?: string;
   aliases?: string[];
   certificateArn?: string;
@@ -29,6 +31,12 @@ export interface CloudFrontDistributionState {
   domainName?: string;
   status?: string;
   enabled: boolean;
+  defaultRootObject?: string;
+  aliases: string[];
+  certificateArn?: string;
+  originId?: string;
+  originDomainName?: string;
+  originPath?: string;
 }
 
 function callerReference(resourceId: string): string {
@@ -179,6 +187,18 @@ export async function findGateHouseDistribution(
             status: result.Distribution.Status,
             enabled:
               result.Distribution.DistributionConfig?.Enabled ?? false,
+            defaultRootObject:
+              result.Distribution.DistributionConfig?.DefaultRootObject,
+            aliases:
+              result.Distribution.DistributionConfig?.Aliases?.Items ?? [],
+            certificateArn:
+              result.Distribution.DistributionConfig?.ViewerCertificate?.ACMCertificateArn,
+            originId:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.Id,
+            originDomainName:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.DomainName,
+            originPath:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.OriginPath,
           }
         : null;
     } catch (cause) {
@@ -216,6 +236,12 @@ export async function findGateHouseDistribution(
         domainName: match.DomainName,
         status: match.Status,
         enabled: match.Enabled ?? false,
+        defaultRootObject: match.DefaultRootObject,
+        aliases: match.Aliases?.Items ?? [],
+        certificateArn: match.ViewerCertificate?.ACMCertificateArn,
+        originId: match.Origins?.Items?.[0]?.Id,
+        originDomainName: match.Origins?.Items?.[0]?.DomainName,
+        originPath: match.Origins?.Items?.[0]?.OriginPath,
       };
     }
 
@@ -234,11 +260,57 @@ export async function ensureGateHouseDistribution(
   const existing = await findGateHouseDistribution(stage, spec);
 
   if (existing) {
-    if (spec.distributionId) {
-      return existing;
-    }
-
     const cloudFront = awsClientsForStage(stage).cloudFront;
+
+    if (spec.distributionId) {
+      const current = await cloudFront.send(
+        new GetDistributionConfigCommand({
+          Id: existing.id,
+        }),
+      );
+
+      if (!current.DistributionConfig || !current.ETag) {
+        throw new Error(
+          `CloudFront distribution "${existing.id}" has no editable configuration`,
+        );
+      }
+
+      const nextConfig = {
+        ...current.DistributionConfig,
+        Enabled: true,
+        DefaultRootObject:
+          spec.defaultRootObject ??
+          current.DistributionConfig.DefaultRootObject,
+        Aliases: desiredAliases(spec),
+        ViewerCertificate: desiredViewerCertificate(spec),
+      };
+
+      const updated = await cloudFront.send(
+        new UpdateDistributionCommand({
+          Id: existing.id,
+          IfMatch: current.ETag,
+          DistributionConfig: nextConfig,
+        }),
+      );
+
+      const config = updated.Distribution?.DistributionConfig;
+
+      return {
+        id: existing.id,
+        domainName:
+          updated.Distribution?.DomainName ?? existing.domainName,
+        status: updated.Distribution?.Status ?? existing.status,
+        enabled: config?.Enabled ?? true,
+        defaultRootObject: config?.DefaultRootObject,
+        aliases: config?.Aliases?.Items ?? [],
+        certificateArn:
+          config?.ViewerCertificate?.ACMCertificateArn,
+        originId: config?.Origins?.Items?.[0]?.Id,
+        originDomainName:
+          config?.Origins?.Items?.[0]?.DomainName,
+        originPath: config?.Origins?.Items?.[0]?.OriginPath,
+      };
+    }
     const current = await cloudFront.send(
       new GetDistributionConfigCommand({
         Id: existing.id,
