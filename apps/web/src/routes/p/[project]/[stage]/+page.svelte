@@ -256,6 +256,34 @@
       </article>
 
       <article class="panel">
+        <span class="eyebrow">Stage lifecycle</span>
+        <h2>Remove stage</h2>
+
+        {#if data.resources.length}
+          <p class="muted">
+            This stage cannot be removed while {data.resources.length} resource{data.resources.length === 1 ? '' : 's'} remain attached.
+          </p>
+        {:else}
+          <p class="muted">
+            Removing the stage only removes GateHouse stage configuration and its saved discovery snapshot.
+            Type the exact stage name to confirm.
+          </p>
+
+          <form method="POST" action="?/remove">
+            <div class="field">
+              <input
+                name="confirmation"
+                placeholder={data.stage.name}
+                autocomplete="off"
+              />
+            </div>
+
+            <button class="pill" type="submit">Remove stage</button>
+          </form>
+        {/if}
+      </article>
+
+      <article class="panel">
         <span class="eyebrow">Project capabilities</span>
         <h2>Available operations</h2>
         <div class="stage-row">
