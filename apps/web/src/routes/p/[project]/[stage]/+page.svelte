@@ -11,6 +11,7 @@
 
   const nav = $derived<ProjectNavItem[]>([
     { label: 'Overview', href: base, enabled: true },
+    { label: 'Discovery', href: `${base}/discovery`, enabled: true },
     { label: 'Logs', href: `${base}/logs`, enabled: data.stage.capabilities.logs },
     { label: 'Errors', href: `${base}/errors`, enabled: data.stage.capabilities.errors },
     { label: 'Requests', href: `${base}/requests`, enabled: data.stage.capabilities.requests },
