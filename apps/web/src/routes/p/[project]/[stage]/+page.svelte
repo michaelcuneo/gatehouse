@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { data } = $props();
+  let { data, form } = $props();
 
   const base = $derived(`/p/${data.project.slug}/${data.stage.name}`);
   const logGroups = $derived(
