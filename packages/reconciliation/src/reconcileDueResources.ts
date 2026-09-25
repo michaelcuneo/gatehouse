@@ -124,6 +124,7 @@ async function artifactChangeIsDue(
 ): Promise<boolean> {
   if (
     resource.kind !== "static_site" ||
+    resource.spec.contentMode === "external" ||
     resource.spec.deployOnChange !== true
   ) {
     return true;
