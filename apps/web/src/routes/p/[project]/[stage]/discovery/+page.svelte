@@ -64,6 +64,20 @@
     }
 
     if (
+      resource.service === 'lambda' &&
+      resource.resourceType === 'AWS::Lambda::Function'
+    ) {
+      return (
+        typeof resource.details?.roleArn === 'string' &&
+        typeof resource.details?.memorySize === 'number' &&
+        typeof resource.details?.timeout === 'number' &&
+        ['x86_64', 'arm64'].includes(
+          String(resource.details?.architecture ?? '')
+        )
+      );
+    }
+
+    if (
       resource.service === 'route53' &&
       resource.resourceType === 'AWS::Route53::RecordSet'
     ) {
