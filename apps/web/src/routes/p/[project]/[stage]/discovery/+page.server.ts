@@ -483,6 +483,63 @@ function importableResource(
   }
 
   if (
+    discovered.service === 'lambda' &&
+    discovered.resourceType === 'AWS::Lambda::Function'
+  ) {
+    const memorySize = numberDetail(discovered, 'memorySize');
+    const timeout = numberDetail(discovered, 'timeout');
+    const architecture = stringDetail(
+      discovered,
+      'architecture'
+    );
+    const runtime = stringDetail(discovered, 'runtime');
+    const handler = stringDetail(discovered, 'handler');
+    const roleArn = stringDetail(discovered, 'roleArn');
+
+    if (
+      memorySize === null ||
+      timeout === null ||
+      !roleArn ||
+      !['x86_64', 'arm64'].includes(architecture ?? '')
+    ) {
+      throw new Error(
+        'Lambda discovery did not return enough configuration to import this function safely.'
+      );
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      kind: 'function',
+      name: discovered.name,
+      provider: 'lambda',
+      version: 1,
+      enabled: true,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+      metadata,
+      runtime: {
+        lastStatusMessage:
+          discovered.ownership === 'external'
+            ? 'Imported Lambda function; externally managed'
+            : 'Imported Lambda function; code and execution context retained externally'
+      },
+      spec: {
+        provider: 'lambda',
+        functionName: discovered.physicalId,
+        region: discovered.region,
+        codeMode: 'external',
+        runtime: runtime || undefined,
+        handler: handler || undefined,
+        memorySize,
+        timeout,
+        architecture: architecture as 'x86_64' | 'arm64',
+        roleArn
+      }
+    };
+  }
+
+  if (
     discovered.service === 'acm' &&
     discovered.resourceType ===
       'AWS::CertificateManager::Certificate' &&
