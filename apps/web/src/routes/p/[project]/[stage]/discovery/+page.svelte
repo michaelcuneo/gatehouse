@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { data } = $props();
+  let { data, form } = $props();
 
   const external = $derived(
     data.discovery.resources.filter((resource) => resource.ownership === 'external')
@@ -20,10 +20,22 @@
       </p>
     </div>
 
-    <a class="pill" href={'/p/' + data.project.slug + '/' + data.stage.name}>
-      Back to stage
-    </a>
+    <div class="stage-row">
+      <form method="POST" action="?/refresh">
+        <button class="pill" type="submit">Refresh inventory</button>
+      </form>
+
+      <a class="pill" href={'/p/' + data.project.slug + '/' + data.stage.name}>
+        Back to stage
+      </a>
+    </div>
   </div>
+
+  <p class="muted mono">Last scanned {new Date(data.discovery.scannedAt).toLocaleString()}</p>
+
+  {#if form?.error}
+    <p class="error mono">{form.error}</p>
+  {/if}
 
   <div class="metric-grid dashboard-metrics">
     <article class="panel metric">
