@@ -6,3 +6,4 @@ export * from "./s3";
 export * from "./cloudfront";
 export * from "./acm";
 export * from "./discovery";
+export * from "./dynamodb";
