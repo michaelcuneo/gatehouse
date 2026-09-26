@@ -173,7 +173,6 @@ async function discoverStacks(
 
   const stacks: AwsDiscoveredStack[] = [];
   const ownership = new Map<string, StackOwnershipIndexEntry>();
-  const stackResources: AwsDiscoveredResource[] = [];
   const resources: AwsDiscoveredResource[] = [];
 
   for (const summary of summaries) {
