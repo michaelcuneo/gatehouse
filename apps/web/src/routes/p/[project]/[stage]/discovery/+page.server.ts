@@ -2,7 +2,11 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 import {
+  applyCloudFormationRetention,
+  cloudFormationStackExists,
+  detachCloudFormationStack,
   discoverAwsStage,
+  verifyCloudFormationRetention,
   type AwsDiscoveredResource,
   type AwsStageDiscovery
 } from '@gatehouse/aws';
@@ -10,12 +14,14 @@ import {
   attachResourceToStage,
   cancelAwsStackMigration,
   getAwsDiscoverySnapshot,
+  getAwsStackMigration,
   getManagedStage,
   listAwsStackMigrations,
   listStageIdsForResource,
   markAwsStackMigrationReady,
   prepareAwsStackMigration,
-  saveAwsDiscoverySnapshot
+  saveAwsDiscoverySnapshot,
+  setAwsStackMigrationStatus
 } from '@gatehouse/db';
 import {
   checkResourceHealth,
@@ -926,6 +932,304 @@ export const actions: Actions = {
       stackId: stack.id,
       readyForDetach: true
     };
+  },
+
+  applyRetention: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+    const migration = getAwsStackMigration(
+      context.stage.id,
+      stackId
+    );
+
+    if (!migration || migration.status !== 'ready_for_detach') {
+      return fail(409, {
+        error: 'Stack migration must be verified before retention policies can be applied.'
+      });
+    }
+
+    if (migration.ownerType !== 'cloudformation') {
+      return fail(409, {
+        error:
+          'Automatic detach is currently limited to plain CloudFormation stacks. SST and CDK stacks remain manual.'
+      });
+    }
+
+    try {
+      await applyCloudFormationRetention(
+        context.stage,
+        migration.region,
+        migration.stackId
+      );
+
+      setAwsStackMigrationStatus(
+        context.stage.id,
+        migration.stackId,
+        'retention_update_pending'
+      );
+
+      return {
+        success: true,
+        action: 'applyRetention',
+        stackId: migration.stackId
+      };
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
+  },
+
+  verifyRetention: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+    const migration = getAwsStackMigration(
+      context.stage.id,
+      stackId
+    );
+
+    if (
+      !migration ||
+      !['retention_update_pending', 'retention_applied'].includes(
+        migration.status
+      )
+    ) {
+      return fail(409, {
+        error: 'No retention update is awaiting verification for this stack.'
+      });
+    }
+
+    try {
+      const verification = await verifyCloudFormationRetention(
+        context.stage,
+        migration.region,
+        migration.stackId
+      );
+
+      if (!verification.ready) {
+        return fail(409, {
+          error:
+            'CloudFormation retention update is not complete yet' +
+            (verification.status
+              ? ` (stack status: ${verification.status})`
+              : '.')
+        });
+      }
+
+      setAwsStackMigrationStatus(
+        context.stage.id,
+        migration.stackId,
+        'retention_applied'
+      );
+
+      return {
+        success: true,
+        action: 'verifyRetention',
+        stackId: migration.stackId
+      };
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
+  },
+
+  detachStack: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+    const confirmation = String(
+      form.get('confirmation') ?? ''
+    ).trim();
+    const migration = getAwsStackMigration(
+      context.stage.id,
+      stackId
+    );
+
+    if (!migration || migration.status !== 'retention_applied') {
+      return fail(409, {
+        error: 'Retention policies must be verified before the stack can be detached.'
+      });
+    }
+
+    if (confirmation !== migration.stackName) {
+      return fail(400, {
+        error: 'Type the exact CloudFormation stack name to confirm detach.'
+      });
+    }
+
+    try {
+      await detachCloudFormationStack(
+        context.stage,
+        migration.region,
+        migration.stackId
+      );
+
+      setAwsStackMigrationStatus(
+        context.stage.id,
+        migration.stackId,
+        'detach_pending'
+      );
+
+      return {
+        success: true,
+        action: 'detachStack',
+        stackId: migration.stackId
+      };
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
+  },
+
+  confirmDetach: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+    const migration = getAwsStackMigration(
+      context.stage.id,
+      stackId
+    );
+
+    if (!migration || migration.status !== 'detach_pending') {
+      return fail(409, {
+        error: 'This stack is not awaiting detach confirmation.'
+      });
+    }
+
+    try {
+      const stillExists = await cloudFormationStackExists(
+        context.stage,
+        migration.region,
+        migration.stackId
+      );
+
+      if (stillExists) {
+        return fail(409, {
+          error: 'CloudFormation still reports the stack. Confirm detach again after stack deletion completes.'
+        });
+      }
+
+      const before = discoverySnapshot(context.stage.id);
+
+      if (!before) {
+        return fail(409, {
+          error: 'The pre-detach discovery snapshot is unavailable.'
+        });
+      }
+
+      const previousChildren = before.resources.filter(
+        (resource) => resource.owner?.id === migration.stackId
+      );
+      const refreshed = await scan(
+        context.stage.id,
+        context.stage
+      );
+      const missing = previousChildren.filter(
+        (previous) =>
+          !refreshed.resources.some(
+            (current) => current.id === previous.id
+          )
+      );
+
+      if (missing.length) {
+        return fail(409, {
+          error:
+            'CloudFormation is gone but one or more retained resources are missing from AWS discovery: ' +
+            missing.map((resource) => resource.name).join(', ')
+        });
+      }
+
+      const updatedIds = new Set<string>();
+
+      for (const child of previousChildren) {
+        const imported = importedResourceForDiscovered(
+          child,
+          before
+        );
+
+        if (!imported || updatedIds.has(imported.id)) {
+          continue;
+        }
+
+        updateResource({
+          ...imported,
+          metadata: {
+            ...(imported.metadata ?? {}),
+            managed: false,
+            ownership: {
+              mode: 'observed'
+            }
+          },
+          status: 'ready',
+          runtime: {
+            ...(imported.runtime ?? {}),
+            lastError: undefined,
+            lastStatusMessage:
+              'External stack ownership detached; resource remains observed until explicit GateHouse takeover'
+          }
+        });
+
+        updatedIds.add(imported.id);
+      }
+
+      setAwsStackMigrationStatus(
+        context.stage.id,
+        migration.stackId,
+        'detached'
+      );
+
+      return {
+        success: true,
+        action: 'confirmDetach',
+        stackId: migration.stackId,
+        retainedResources: previousChildren.length,
+        reclassifiedResources: updatedIds.size
+      };
+    } catch (cause) {
+      return fail(409, {
+        error: cause instanceof Error
+          ? cause.message
+          : String(cause)
+      });
+    }
   },
 
   cancelMigration: async ({ params, request }) => {
