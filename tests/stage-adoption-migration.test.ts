@@ -66,3 +66,131 @@ test("existing stage schemas migrate to read-only adoption mode", async () => {
     delete process.env.GATEHOUSE_ROOT;
   }
 });
+
+
+test("stack migration state is isolated by GateHouse stage even for the same stack id", async () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gatehouse-stack-stage-isolation-"),
+  );
+
+  process.env.GATEHOUSE_ROOT = root;
+
+  try {
+    const runtime = await import("../packages/runtime/src/index.ts");
+    const db = await import("../packages/db/src/index.ts");
+
+    await runtime.ensureRuntime();
+    db.initDatabase();
+
+    const now = "2026-09-27T00:00:00.000Z";
+    const capabilities = {
+      logs: false,
+      errors: false,
+      requests: false,
+      functions: false,
+      services: false,
+      databases: false,
+      queues: false,
+      metrics: false,
+      costs: false,
+      deployments: false,
+      traces: false,
+      aiUsage: false,
+      auth: false,
+      diagnostics: false,
+    };
+
+    db.saveManagedProject({
+      id: "project-1",
+      slug: "example",
+      name: "Example",
+      provider: "aws",
+      createdAt: now,
+      updatedAt: now,
+      stages: [
+        {
+          id: "stage-a",
+          name: "a",
+          accountId: "123456789012",
+          primaryRegion: "ap-southeast-2",
+          access: { mode: "default" },
+          capabilities,
+          selectors: [],
+          enabled: true,
+        },
+        {
+          id: "stage-b",
+          name: "b",
+          accountId: "123456789012",
+          primaryRegion: "ap-southeast-2",
+          access: { mode: "default" },
+          capabilities,
+          selectors: [],
+          enabled: true,
+        },
+      ],
+    });
+
+    for (const stageId of ["stage-a", "stage-b"]) {
+      db.prepareAwsStackMigration({
+        stageId,
+        stackId: "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+        stackName: "shared",
+        ownerType: "cloudformation",
+        region: "ap-southeast-2",
+      });
+    }
+
+    db.setAwsStackMigrationStatus(
+      "stage-a",
+      "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+      "ready_for_detach",
+    );
+
+    assert.equal(
+      db.getAwsStackMigration(
+        "stage-a",
+        "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+      )?.status,
+      "ready_for_detach",
+    );
+
+    assert.equal(
+      db.getAwsStackMigration(
+        "stage-b",
+        "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+      )?.status,
+      "prepared",
+    );
+
+    assert.equal(
+      db.cancelAwsStackMigration(
+        "stage-a",
+        "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+      ),
+      true,
+    );
+
+    assert.equal(
+      db.getAwsStackMigration(
+        "stage-a",
+        "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+      ),
+      null,
+    );
+
+    assert.equal(
+      db.getAwsStackMigration(
+        "stage-b",
+        "arn:aws:cloudformation:ap-southeast-2:123456789012:stack/shared/abc",
+      )?.status,
+      "prepared",
+    );
+  } finally {
+    fs.rmSync(root, {
+      recursive: true,
+      force: true,
+    });
+    delete process.env.GATEHOUSE_ROOT;
+  }
+});
