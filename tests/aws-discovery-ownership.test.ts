@@ -392,3 +392,50 @@ test("fallback de-duplication keeps same-named regional resources in different r
     ],
   );
 });
+
+
+test("ambiguous same-region stack ownership is external but unresolved", () => {
+  const ownership = new Map<string, any>();
+
+  ownership.set("shared-table", [
+    {
+      type: "cloudformation",
+      id: "stack-a",
+      name: "stack-a",
+      logicalId: "TableA",
+      resourceType: "AWS::DynamoDB::Table",
+      region: "ap-southeast-2",
+    },
+    {
+      type: "cloudformation",
+      id: "stack-b",
+      name: "stack-b",
+      logicalId: "TableB",
+      resourceType: "AWS::DynamoDB::Table",
+      region: "ap-southeast-2",
+    },
+  ]);
+
+  const resource = discovered(
+    {
+      id: "dynamodb:ap-southeast-2:shared-table",
+      service: "dynamodb",
+      resourceType: "AWS::DynamoDB::Table",
+      name: "shared-table",
+      physicalId: "shared-table",
+      region: "ap-southeast-2",
+    },
+    ownership,
+  );
+
+  assert.equal(resource.ownership, "external");
+  assert.equal(resource.owner, undefined);
+  assert.equal(
+    resource.details?.ownershipAmbiguous,
+    true,
+  );
+  assert.equal(
+    resource.details?.ownershipCandidateCount,
+    2,
+  );
+});
