@@ -8,9 +8,12 @@ import {
 } from '@gatehouse/aws';
 import {
   attachResourceToStage,
+  cancelAwsStackMigration,
   getAwsDiscoverySnapshot,
   getManagedStage,
+  listAwsStackMigrations,
   listStageIdsForResource,
+  prepareAwsStackMigration,
   saveAwsDiscoverySnapshot
 } from '@gatehouse/db';
 import {
@@ -744,14 +747,91 @@ export const load: PageServerLoad = async ({ params }) => {
       ])
   );
 
+  const stackMigrations = Object.fromEntries(
+    listAwsStackMigrations(context.stage.id).map((migration) => [
+      migration.stackId,
+      migration
+    ])
+  );
+
   return {
     ...context,
     discovery,
-    imported
+    imported,
+    stackMigrations
   };
 };
 
 export const actions: Actions = {
+  prepareMigration: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+    const snapshot = discoverySnapshot(context.stage.id);
+    const stack = snapshot?.stacks.find(
+      (candidate) => candidate.id === stackId
+    );
+
+    if (!stack) {
+      return fail(404, {
+        error: 'Stack is not present in the saved discovery inventory.'
+      });
+    }
+
+    const children = snapshot?.resources.filter(
+      (resource) => resource.owner?.id === stack.id
+    ) ?? [];
+
+    if (!children.length) {
+      return fail(409, {
+        error: 'No discovered child resources were found for this stack.'
+      });
+    }
+
+    prepareAwsStackMigration({
+      stageId: context.stage.id,
+      stackId: stack.id,
+      stackName: stack.name,
+      ownerType: stack.ownerType,
+      region: stack.region
+    });
+
+    return {
+      success: true,
+      action: 'prepareMigration',
+      stackId: stack.id,
+      childCount: children.length
+    };
+  },
+
+  cancelMigration: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+
+    cancelAwsStackMigration(context.stage.id, stackId);
+
+    return {
+      success: true,
+      action: 'cancelMigration',
+      stackId
+    };
+  },
+
   refresh: async ({ params }) => {
     const context = getManagedStage(params.project, params.stage);
 
