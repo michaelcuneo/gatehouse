@@ -116,6 +116,19 @@ test("GateHouse state export and restore round-trip in an isolated runtime", asy
 
     const exported = db.exportGateHouseState();
 
+    const legacy = structuredClone(exported);
+
+    for (const row of legacy.tables.managed_project_stages) {
+      delete row.adoption_mode;
+    }
+
+    db.restoreGateHouseState(legacy);
+
+    assert.equal(
+      db.getManagedProject("project-1")?.stages[0]?.adoptionMode,
+      "read_only",
+    );
+
     const invalid = structuredClone(exported);
     invalid.tables.managed_project_resources.push({
       stage_id: "missing-stage",
