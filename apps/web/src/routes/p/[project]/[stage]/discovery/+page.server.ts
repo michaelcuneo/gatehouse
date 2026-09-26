@@ -202,10 +202,104 @@ function importableResource(
     const value = stringDetail(discovered, 'value');
     const ttl = numberDetail(discovered, 'ttl');
     const alias = booleanDetail(discovered, 'alias');
+    const aliasDnsName = stringDetail(
+      discovered,
+      'aliasDnsName'
+    );
     const valueCount = numberDetail(discovered, 'valueCount');
 
+    if (alias) {
+      if (
+        type !== 'A' ||
+        !zone ||
+        !aliasDnsName
+      ) {
+        throw new Error(
+          'Import the A member of a CloudFront A/AAAA alias pair. GateHouse represents the pair as one DNS resource.'
+        );
+      }
+
+      const snapshot = discoverySnapshot(stageId);
+
+      const ipv6Pair = snapshot?.resources.find(
+        (candidate) =>
+          candidate.service === 'route53' &&
+          candidate.resourceType === 'AWS::Route53::RecordSet' &&
+          candidate.name === discovered.name &&
+          stringDetail(candidate, 'zone') === zone &&
+          stringDetail(candidate, 'type') === 'AAAA' &&
+          booleanDetail(candidate, 'alias') &&
+          stringDetail(candidate, 'aliasDnsName') === aliasDnsName
+      );
+
+      if (!ipv6Pair) {
+        throw new Error(
+          'GateHouse requires the matching AAAA CloudFront alias before importing this DNS pair.'
+        );
+      }
+
+      const normalizedTarget =
+        aliasDnsName.replace(/\.$/, '').toLowerCase();
+
+      const distribution = snapshot?.resources.find(
+        (candidate) =>
+          candidate.service === 'cloudfront' &&
+          candidate.resourceType === 'AWS::CloudFront::Distribution' &&
+          String(candidate.details?.domainName ?? '')
+            .replace(/\.$/, '')
+            .toLowerCase() === normalizedTarget
+      );
+
+      if (!distribution) {
+        throw new Error(
+          'The CloudFront distribution targeted by this Route53 alias is not present in the saved discovery inventory.'
+        );
+      }
+
+      const site = importedAwsResource(
+        stageId,
+        (resource) =>
+          resource.kind === 'static_site' &&
+          resource.metadata?.importedFrom?.discoveryId ===
+            distribution.id
+      );
+
+      if (!site || site.kind !== 'static_site') {
+        throw new Error(
+          'Import the targeted CloudFront distribution before importing its Route53 alias.'
+        );
+      }
+
+      return {
+        id: crypto.randomUUID(),
+        kind: 'dns_record',
+        name: discovered.name.replace(/\.$/, ''),
+        provider: 'route53',
+        version: 1,
+        enabled: true,
+        status: 'ready',
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          ...metadata,
+          dependsOn: [site.id]
+        },
+        runtime: {
+          lastStatusMessage:
+            discovered.ownership === 'external'
+              ? 'Imported CloudFront DNS alias; externally managed'
+              : 'Imported CloudFront DNS alias pair; observation only'
+        },
+        spec: {
+          mode: 'cloudfront_alias',
+          zone,
+          name: discovered.name.replace(/\.$/, ''),
+          staticSiteId: site.id
+        }
+      };
+    }
+
     if (
-      alias ||
       valueCount !== 1 ||
       !zone ||
       !value ||
