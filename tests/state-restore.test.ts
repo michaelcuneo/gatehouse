@@ -84,6 +84,36 @@ test("GateHouse state export and restore round-trip in an isolated runtime", asy
 
     db.attachResourceToStage("stage-1", "resource-1");
 
+    const migration = db.prepareAwsStackMigration({
+      stageId: "stage-1",
+      stackId: "stack-1",
+      stackName: "test-stack",
+      ownerType: "cloudformation",
+      region: "ap-southeast-2",
+    });
+
+    assert.equal(migration.status, "prepared");
+
+    db.setAwsStackMigrationStatus(
+      "stage-1",
+      "stack-1",
+      "detached",
+    );
+
+    const reprepared = db.prepareAwsStackMigration({
+      stageId: "stage-1",
+      stackId: "stack-1",
+      stackName: "test-stack",
+      ownerType: "cloudformation",
+      region: "ap-southeast-2",
+    });
+
+    assert.equal(reprepared.status, "detached");
+    assert.equal(
+      db.cancelAwsStackMigration("stage-1", "stack-1"),
+      false,
+    );
+
     const exported = db.exportGateHouseState();
 
     assert.equal(exported.tables.managed_projects.length, 1);
