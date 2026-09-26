@@ -392,8 +392,8 @@ test("stage adoption is locked by default and only explicit enabled mode unlocks
 test("dogfood discovery report excludes AWS access credentials and carries adoption assessments", () => {
   const discovery = {
     accountId: "123456789012",
-    scannedAt: "2026-09-26T10:00:00.000Z",
-    regions: ["ap-southeast-2"],
+    scannedAt: "2026-09-26T10:55:00.000Z",
+    regions: ["ap-southeast-2", "us-east-1"],
     stacks: [],
     warnings: [],
     resources: [
@@ -428,9 +428,11 @@ test("dogfood discovery report excludes AWS access credentials and carries adopt
     report.format,
     "gatehouse-aws-discovery-report",
   );
-  assert.equal(report.version, 1);
+  assert.equal(report.version, 2);
   assert.equal(report.stage.adoptionMode, "read_only");
   assert.equal(report.discovery.summary.importable, 1);
+  assert.equal(report.discovery.dogfoodReadiness.ready, true);
+  assert.equal(report.discovery.adoptionSafety.ready, true);
   assert.equal(
     report.discovery.resources[0]?.adoption.state,
     "importable",
