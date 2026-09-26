@@ -11,13 +11,12 @@
     "format": "prettier --write .",
     "dev:turbo": "turbo run dev",
     "setup:linux": "sudo bash install/linux/install.sh",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "node --test tests/*.test.ts"
   },
   "devDependencies": {
     "turbo": "latest",
     "typescript": "latest",
     "prettier": "latest",
-    "@types/node": "^22.0.0",
-    "tsx": "^4.20.6"
+    "@types/node": "^22.0.0"
   }
 }
