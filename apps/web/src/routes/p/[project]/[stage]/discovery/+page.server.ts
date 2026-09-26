@@ -5,6 +5,7 @@ import {
   applyCloudFormationRetention,
   assessAwsDiscoveryResource,
   awsStageAdoptionEnabled,
+  evaluateAwsAdoptionUnlockReadiness,
   assertImportableCloudFront,
   assertImportableDynamoDB,
   assertImportableS3,
@@ -654,6 +655,32 @@ function adoptionLockError(
   });
 }
 
+function adoptionMutationError(
+  stageId: string,
+  stage: Parameters<typeof evaluateAwsAdoptionUnlockReadiness>[0]
+) {
+  const locked = adoptionLockError(stage);
+
+  if (locked) {
+    return locked;
+  }
+
+  const readiness = evaluateAwsAdoptionUnlockReadiness(
+    stage,
+    discoverySnapshot(stageId)
+  );
+
+  if (!readiness.ready) {
+    return fail(409, {
+      error:
+        'AWS adoption safety preflight no longer passes. Refresh Discovery before mutating AWS or ownership: ' +
+        readiness.blockers.join(' ')
+    });
+  }
+
+  return null;
+}
+
 export const load: PageServerLoad = async ({ params }) => {
   const context = requireStage(params);
 
@@ -729,7 +756,10 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionLockError(context.stage);
+    const locked = adoptionMutationError(
+      context.stage.id,
+      context.stage
+    );
 
     if (locked) {
       return locked;
@@ -783,7 +813,10 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionLockError(context.stage);
+    const locked = adoptionMutationError(
+      context.stage.id,
+      context.stage
+    );
 
     if (locked) {
       return locked;
@@ -871,7 +904,10 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionLockError(context.stage);
+    const locked = adoptionMutationError(
+      context.stage.id,
+      context.stage
+    );
 
     if (locked) {
       return locked;
@@ -997,7 +1033,10 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionLockError(context.stage);
+    const locked = adoptionMutationError(
+      context.stage.id,
+      context.stage
+    );
 
     if (locked) {
       return locked;
@@ -1231,7 +1270,10 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionLockError(context.stage);
+    const locked = adoptionMutationError(
+      context.stage.id,
+      context.stage
+    );
 
     if (locked) {
       return locked;
@@ -1353,7 +1395,10 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionLockError(context.stage);
+    const locked = adoptionMutationError(
+      context.stage.id,
+      context.stage
+    );
 
     if (locked) {
       return locked;
