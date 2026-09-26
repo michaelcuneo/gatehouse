@@ -6,3 +6,4 @@ export * from "./listResources";
 export * from "./updateResourceRuntime";
 export * from "./validateResource";
 export * from "./findImportedAwsResource";
+export * from "./listImportedAwsResources";
