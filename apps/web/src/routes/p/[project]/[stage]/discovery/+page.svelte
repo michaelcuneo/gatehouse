@@ -81,8 +81,29 @@
       resource.service === 'route53' &&
       resource.resourceType === 'AWS::Route53::RecordSet'
     ) {
+      if (resource.details?.alias === true) {
+        if (
+          resource.details?.type !== 'A' ||
+          typeof resource.details?.zone !== 'string' ||
+          typeof resource.details?.aliasDnsName !== 'string'
+        ) {
+          return false;
+        }
+
+        return data.discovery.resources.some(
+          (candidate) =>
+            candidate.service === 'route53' &&
+            candidate.resourceType === 'AWS::Route53::RecordSet' &&
+            candidate.name === resource.name &&
+            candidate.details?.zone === resource.details?.zone &&
+            candidate.details?.type === 'AAAA' &&
+            candidate.details?.alias === true &&
+            candidate.details?.aliasDnsName ===
+              resource.details?.aliasDnsName
+        );
+      }
+
       return (
-        resource.details?.alias !== true &&
         resource.details?.valueCount === 1 &&
         ['A', 'AAAA', 'CNAME', 'TXT'].includes(String(resource.details?.type ?? '')) &&
         typeof resource.details?.zone === 'string' &&
@@ -94,8 +115,38 @@
     return false;
   };
 
-  const importedFor = (discoveryId: string) =>
-    data.imported[discoveryId] ?? null;
+  const importedFor = (
+    resource: (typeof data.discovery.resources)[number]
+  ) => {
+    const direct = data.imported[resource.id];
+
+    if (direct) {
+      return direct;
+    }
+
+    if (
+      resource.service === 'route53' &&
+      resource.resourceType === 'AWS::Route53::RecordSet' &&
+      resource.details?.alias === true &&
+      resource.details?.type === 'AAAA'
+    ) {
+      const pair = data.discovery.resources.find(
+        (candidate) =>
+          candidate.service === 'route53' &&
+          candidate.resourceType === 'AWS::Route53::RecordSet' &&
+          candidate.name === resource.name &&
+          candidate.details?.zone === resource.details?.zone &&
+          candidate.details?.type === 'A' &&
+          candidate.details?.alias === true &&
+          candidate.details?.aliasDnsName ===
+            resource.details?.aliasDnsName
+      );
+
+      return pair ? data.imported[pair.id] ?? null : null;
+    }
+
+    return null;
+  };
 
   const dryRunPassedFor = (resourceId: string) =>
     form?.action === 'dryRun' &&
@@ -242,7 +293,7 @@
         </thead>
         <tbody>
           {#each data.discovery.resources as resource}
-            {@const imported = importedFor(resource.id)}
+            {@const imported = importedFor(resource)}
             <tr>
               <td>
                 <strong>{resource.name}</strong>
