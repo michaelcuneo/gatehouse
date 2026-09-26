@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   assertAwsStageAccess,
+  evaluateAwsAdoptionUnlockReadiness,
   evaluateAwsDogfoodReadiness,
   summarizeAwsDiscoveryAdoption,
   type AwsStageDiscovery
@@ -35,6 +36,40 @@ function regions(value: string, primaryRegion: string) {
         )
     )
   ];
+}
+
+function sameStringSet(
+  left: string[] | undefined,
+  right: string[] | undefined
+) {
+  return JSON.stringify([...(left ?? [])].sort()) ===
+    JSON.stringify([...(right ?? [])].sort());
+}
+
+function awsStageIdentityChanged(
+  current: {
+    accountId: string;
+    primaryRegion: string;
+    additionalRegions?: string[];
+    access: unknown;
+  },
+  proposed: {
+    accountId: string;
+    primaryRegion: string;
+    additionalRegions?: string[];
+    access: unknown;
+  }
+) {
+  return (
+    current.accountId !== proposed.accountId ||
+    current.primaryRegion !== proposed.primaryRegion ||
+    !sameStringSet(
+      current.additionalRegions,
+      proposed.additionalRegions
+    ) ||
+    JSON.stringify(current.access) !==
+      JSON.stringify(proposed.access)
+  );
 }
 
 function stageContext(
@@ -250,6 +285,43 @@ export const actions: Actions = {
         : [],
       enabled
     };
+
+    const unlockingAdoption =
+      (context.stage.adoptionMode ?? 'read_only') !==
+        'enabled' &&
+      updatedStage.adoptionMode === 'enabled';
+
+    if (unlockingAdoption) {
+      if (
+        awsStageIdentityChanged(
+          context.stage,
+          updatedStage
+        )
+      ) {
+        return fail(409, {
+          error:
+            'Save AWS account, region or access changes while the stage is still read-only, refresh Discovery, then enable adoption in a separate save.'
+        });
+      }
+
+      const snapshot =
+        getAwsDiscoverySnapshot<AwsStageDiscovery>(
+          context.stage.id
+        )?.payload ?? null;
+      const readiness =
+        evaluateAwsAdoptionUnlockReadiness(
+          updatedStage,
+          snapshot
+        );
+
+      if (!readiness.ready) {
+        return fail(409, {
+          error:
+            'AWS adoption cannot be enabled until read-only dogfood preflight passes: ' +
+            readiness.blockers.join(' ')
+        });
+      }
+    }
 
     if (updatedStage.enabled) {
       try {
