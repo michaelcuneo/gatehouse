@@ -84,6 +84,7 @@ export const actions: Actions = {
             ...defaultProjectCapabilities,
             diagnostics: Boolean(diagnosticsProfile)
           },
+          adoptionMode: 'read_only',
           selectors: logGroups.length
             ? [
                 {
@@ -169,6 +170,7 @@ export const actions: Actions = {
         ...defaultProjectCapabilities
       },
       selectors: [],
+      adoptionMode: 'read_only' as const,
       enabled: true
     };
 
