@@ -91,7 +91,7 @@ function uniqueRegions(stage: ManagedStage): string[] {
   ].filter(Boolean);
 }
 
-function normalisePhysicalId(value: string): string[] {
+export function normalisePhysicalId(value: string): string[] {
   const trimmed = value.trim();
   const candidates = [
     trimmed,
@@ -110,7 +110,7 @@ function normalisePhysicalId(value: string): string[] {
   ];
 }
 
-function stackOwnerType(
+export function stackOwnerType(
   description: string | undefined,
   tags: { Key?: string; Value?: string }[] | undefined,
 ): "cloudformation" | "sst" | "cdk" {
@@ -227,7 +227,7 @@ async function discoverStacks(
   return { stacks, ownership };
 }
 
-function ownerFor(
+export function ownerFor(
   physicalId: string,
   ownership: Map<string, StackOwnershipIndexEntry>,
 ): AwsDiscoveredOwner | undefined {
@@ -247,7 +247,7 @@ function ownerFor(
   return undefined;
 }
 
-function discovered(
+export function discovered(
   input: Omit<AwsDiscoveredResource, "ownership" | "owner">,
   ownership: Map<string, StackOwnershipIndexEntry>,
 ): AwsDiscoveredResource {
