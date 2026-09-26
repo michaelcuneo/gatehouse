@@ -3,6 +3,9 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   applyCloudFormationRetention,
+  assertImportableCloudFront,
+  assertImportableDynamoDB,
+  assertImportableS3,
   cloudFormationStackExists,
   detachCloudFormationStack,
   discoverAwsStage,
@@ -146,16 +149,6 @@ function importedAwsResource(
   );
 }
 
-function s3BucketFromOriginDomain(
-  domainName: string
-): string | null {
-  const match = domainName.match(
-    /^(.+)\.s3(?:[.-][^.]+)?\.amazonaws\.com$/i
-  );
-
-  return match?.[1] ?? null;
-}
-
 function importableResource(
   discovered: AwsDiscoveredResource,
   accountId: string,
@@ -195,21 +188,7 @@ function importableResource(
     discovered.service === 's3' &&
     discovered.resourceType === 'AWS::S3::Bucket'
   ) {
-    const flags = [
-      booleanDetail(discovered, 'blockPublicAcls'),
-      booleanDetail(discovered, 'ignorePublicAcls'),
-      booleanDetail(discovered, 'blockPublicPolicy'),
-      booleanDetail(discovered, 'restrictPublicBuckets')
-    ];
-
-    const allBlocked = flags.every(Boolean);
-    const allOpen = flags.every((value) => !value);
-
-    if (!allBlocked && !allOpen) {
-      throw new Error(
-        'This S3 bucket uses mixed Public Access Block settings that GateHouse cannot reproduce exactly yet.'
-      );
-    }
+    const s3 = assertImportableS3(discovered);
 
     return {
       id: crypto.randomUUID(),
@@ -232,7 +211,7 @@ function importableResource(
         provider: 's3',
         bucket: discovered.physicalId,
         region: discovered.region,
-        public: allOpen
+        public: s3.public
       }
     };
   }
@@ -387,40 +366,7 @@ function importableResource(
     discovered.service === 'dynamodb' &&
     discovered.resourceType === 'AWS::DynamoDB::Table'
   ) {
-    const partitionKey = stringDetail(discovered, 'partitionKey');
-    const partitionKeyType = stringDetail(
-      discovered,
-      'partitionKeyType'
-    );
-    const sortKey = stringDetail(discovered, 'sortKey');
-    const sortKeyType = stringDetail(discovered, 'sortKeyType');
-    const billingMode = stringDetail(discovered, 'billingMode');
-    const readCapacity = numberDetail(discovered, 'readCapacity');
-    const writeCapacity = numberDetail(discovered, 'writeCapacity');
-    const globalIndexes =
-      numberDetail(discovered, 'globalSecondaryIndexes') ?? 0;
-    const localIndexes =
-      numberDetail(discovered, 'localSecondaryIndexes') ?? 0;
-
-    if (globalIndexes || localIndexes) {
-      throw new Error(
-        'This DynamoDB table has secondary indexes. GateHouse will keep it inventory-only until index management is implemented.'
-      );
-    }
-
-    if (
-      !partitionKey ||
-      !['S', 'N', 'B'].includes(partitionKeyType ?? '') ||
-      (sortKey &&
-        !['S', 'N', 'B'].includes(sortKeyType ?? '')) ||
-      !['PAY_PER_REQUEST', 'PROVISIONED'].includes(
-        billingMode ?? ''
-      )
-    ) {
-      throw new Error(
-        'DynamoDB discovery did not return a primary-key schema GateHouse can represent safely.'
-      );
-    }
+    const table = assertImportableDynamoDB(discovered);
 
     return {
       id: crypto.randomUUID(),
@@ -444,30 +390,19 @@ function importableResource(
         tableName: discovered.physicalId,
         region: discovered.region,
         partitionKey: {
-          name: partitionKey,
-          type: partitionKeyType as 'S' | 'N' | 'B'
+          name: table.partitionKey,
+          type: table.partitionKeyType
         },
-        sortKey: sortKey
+        sortKey: table.sortKey
           ? {
-              name: sortKey,
-              type: sortKeyType as 'S' | 'N' | 'B'
+              name: table.sortKey,
+              type: table.sortKeyType!
             }
           : undefined,
-        billingMode: billingMode as
-          | 'PAY_PER_REQUEST'
-          | 'PROVISIONED',
-        readCapacity:
-          billingMode === 'PROVISIONED'
-            ? readCapacity ?? 1
-            : undefined,
-        writeCapacity:
-          billingMode === 'PROVISIONED'
-            ? writeCapacity ?? 1
-            : undefined,
-        deletionProtection: booleanDetail(
-          discovered,
-          'deletionProtection'
-        )
+        billingMode: table.billingMode,
+        readCapacity: table.readCapacity,
+        writeCapacity: table.writeCapacity,
+        deletionProtection: table.deletionProtection
       }
     };
   }
@@ -476,68 +411,15 @@ function importableResource(
     discovered.service === 'cloudfront' &&
     discovered.resourceType === 'AWS::CloudFront::Distribution'
   ) {
-    const originCount = numberDetail(discovered, 'originCount') ?? 0;
-    const originId = stringDetail(discovered, 'originId');
-    const originDomainName = stringDetail(
-      discovered,
-      'originDomainName'
-    );
-    const originPath = stringDetail(discovered, 'originPath') ?? '';
-    const originIsS3 = booleanDetail(discovered, 'originIsS3');
-    const defaultTargetOriginId = stringDetail(
-      discovered,
-      'defaultTargetOriginId'
-    );
-    const cacheBehaviors =
-      numberDetail(discovered, 'cacheBehaviors') ?? 0;
-    const lambdaAssociations =
-      numberDetail(discovered, 'lambdaAssociations') ?? 0;
-    const functionAssociations =
-      numberDetail(discovered, 'functionAssociations') ?? 0;
-    const aliasesJson = stringDetail(discovered, 'aliases');
-    const certificateArn = stringDetail(
-      discovered,
-      'certificateArn'
-    );
-    const defaultRootObject =
-      stringDetail(discovered, 'defaultRootObject') ?? '';
-
-    let aliases: string[] = [];
-
-    try {
-      const parsed = aliasesJson ? JSON.parse(aliasesJson) : [];
-      aliases = Array.isArray(parsed)
-        ? parsed.filter(
-            (alias): alias is string =>
-              typeof alias === 'string' && Boolean(alias.trim())
-          )
-        : [];
-    } catch {
-      aliases = [];
-    }
-
-    if (
-      originCount !== 1 ||
-      !originId ||
-      !originDomainName ||
-      !originIsS3 ||
-      defaultTargetOriginId !== originId ||
-      cacheBehaviors !== 0 ||
-      lambdaAssociations !== 0 ||
-      functionAssociations !== 0
-    ) {
-      throw new Error(
-        'This CloudFront distribution has multiple origins, additional cache behaviours, or edge functions that GateHouse cannot reproduce safely yet.'
-      );
-    }
-
-    const bucketName = s3BucketFromOriginDomain(originDomainName);
-
-    if (!bucketName) {
-      throw new Error(
-        'GateHouse could not map the CloudFront origin to an S3 bucket safely.'
-      );
-    }
+    const cloudFront = assertImportableCloudFront(discovered);
+    const {
+      originId,
+      originPath,
+      bucketName,
+      aliases,
+      certificateArn,
+      defaultRootObject
+    } = cloudFront;
 
     const storage = importedAwsResource(
       stageId,
