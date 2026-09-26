@@ -863,3 +863,40 @@ test("adoption unlock preflight evaluates the proposed stage under the read-only
     ),
   );
 });
+
+
+test("ambiguous CloudFormation ownership blocks adoption even for otherwise supported resources", () => {
+  const resource = discovered(
+    "s3",
+    "AWS::S3::Bucket",
+    {
+      blockPublicAcls: true,
+      ignorePublicAcls: true,
+      blockPublicPolicy: true,
+      restrictPublicBuckets: true,
+      ownershipAmbiguous: true,
+      ownershipCandidateCount: 2,
+    },
+  );
+
+  resource.ownership = "external";
+
+  const assessment =
+    assessAwsDiscoveryResource(
+      resource,
+      [resource],
+    );
+
+  assert.equal(
+    assessment.state,
+    "inventory_only",
+  );
+  assert.equal(
+    assessment.importable,
+    false,
+  );
+  assert.match(
+    assessment.reason ?? "",
+    /ownership is ambiguous/i,
+  );
+});
