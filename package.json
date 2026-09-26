@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "dev:turbo": "turbo run dev",
     "setup:linux": "sudo bash install/linux/install.sh",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "dogfood:aws": "tsx scripts/aws-dogfood.ts"
   },
   "devDependencies": {
     "turbo": "latest",
