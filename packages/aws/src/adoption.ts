@@ -1,3 +1,4 @@
+import type { ManagedStage } from "@gatehouse/core";
 import type { AwsDiscoveredResource } from "./discovery";
 
 export function booleanDiscoveryDetail(
@@ -531,4 +532,11 @@ export function summarizeAwsDiscoveryAdoption(
       (resource) => resource.ownership === "observed",
     ).length,
   };
+}
+
+
+export function awsStageAdoptionEnabled(
+  stage: Pick<ManagedStage, "adoptionMode">,
+): boolean {
+  return (stage.adoptionMode ?? "read_only") === "enabled";
 }
