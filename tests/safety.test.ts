@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildRetainedCloudFormationTemplate } from "../packages/aws/src/cloudformationMigration.ts";
+import { validateGateHouseStateExport } from "../packages/db/src/stateExport.ts";
 import { resourceOwnership } from "../packages/providers/src/ownership.ts";
 import { planReconciliation } from "../packages/reconciliation/src/planReconciliation.ts";
+import {
+  beginRuntimeOperation,
+  runtimeMaintenanceActive,
+  withRuntimeMaintenance,
+} from "../packages/runtime/src/maintenance.ts";
 
 function service(
   id: string,
@@ -170,4 +176,106 @@ test("CloudFormation retention transform rejects nested and custom resources", (
       }),
     /will not automatically detach/i,
   );
+});
+
+
+test("reconciliation rejects disabled dependencies", () => {
+  const database = {
+    ...service("database"),
+    enabled: false,
+  };
+  const api = service("api", ["database"]);
+
+  assert.throws(
+    () => planReconciliation([api, database] as any, ["api"]),
+    /depends on disabled resource/i,
+  );
+});
+
+function emptyBackup() {
+  return {
+    format: "gatehouse-state",
+    version: 1,
+    exportedAt: "2026-09-26T00:00:00.000Z",
+    tables: {
+      resources: [],
+      managed_projects: [],
+      managed_project_stages: [],
+      managed_project_resources: [],
+      audit_logs: [],
+      aws_discovery_snapshots: [],
+      aws_stack_migrations: [],
+      deployments: [],
+    },
+  };
+}
+
+test("backup validation accepts a complete v1 state export", () => {
+  const backup = emptyBackup();
+  const validated = validateGateHouseStateExport(backup);
+
+  assert.equal(validated.format, "gatehouse-state");
+  assert.equal(validated.version, 1);
+  assert.deepEqual(validated.tables.resources, []);
+});
+
+test("backup validation rejects unsupported versions", () => {
+  assert.throws(
+    () =>
+      validateGateHouseStateExport({
+        ...emptyBackup(),
+        version: 2,
+      }),
+    /unsupported GateHouse state backup format\/version/i,
+  );
+});
+
+test("backup validation rejects missing tables", () => {
+  const backup = emptyBackup();
+  delete (backup.tables as Record<string, unknown>).deployments;
+
+  assert.throws(
+    () => validateGateHouseStateExport(backup),
+    /backup table "deployments" is missing or invalid/i,
+  );
+});
+
+test("backup validation rejects unknown columns", () => {
+  const backup = emptyBackup();
+  backup.tables.resources.push({
+    id: "resource-1",
+    unexpected_column: "unsafe",
+  } as never);
+
+  assert.throws(
+    () => validateGateHouseStateExport(backup),
+    /contains unsupported column "unexpected_column"/i,
+  );
+});
+
+test("runtime maintenance blocks new operations and waits for active work", async () => {
+  const finish = beginRuntimeOperation();
+
+  assert.ok(finish);
+  assert.equal(runtimeMaintenanceActive(), false);
+
+  let maintenanceEntered = false;
+
+  const maintenance = withRuntimeMaintenance(async () => {
+    maintenanceEntered = true;
+    assert.equal(runtimeMaintenanceActive(), true);
+    assert.equal(beginRuntimeOperation(), null);
+    return "restored";
+  });
+
+  await Promise.resolve();
+
+  assert.equal(runtimeMaintenanceActive(), true);
+  assert.equal(maintenanceEntered, false);
+
+  finish?.();
+
+  assert.equal(await maintenance, "restored");
+  assert.equal(maintenanceEntered, true);
+  assert.equal(runtimeMaintenanceActive(), false);
 });
