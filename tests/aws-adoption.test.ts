@@ -424,6 +424,7 @@ test("stage adoption is locked by default and only explicit enabled mode unlocks
   assert.equal(
     awsStageAdoptionEnabled({
       adoptionMode: "read_only",
+      enabled: true,
     }),
     false,
   );
@@ -431,6 +432,7 @@ test("stage adoption is locked by default and only explicit enabled mode unlocks
   assert.equal(
     awsStageAdoptionEnabled({
       adoptionMode: "enabled",
+      enabled: true,
     }),
     true,
   );
@@ -471,6 +473,7 @@ test("dogfood discovery report excludes AWS access credentials and carries adopt
       primaryRegion: "ap-southeast-2",
       additionalRegions: ["us-east-1"],
       adoptionMode: "read_only",
+      enabled: true,
     },
     discovery,
     exportedAt: "2026-09-26T11:00:00.000Z",
@@ -505,6 +508,7 @@ test("dogfood readiness requires lock, account match, full region coverage and n
     primaryRegion: "ap-southeast-2",
     additionalRegions: ["us-east-1"],
     adoptionMode: "read_only" as const,
+    enabled: true,
   };
 
   const healthyDiscovery = {
@@ -533,10 +537,27 @@ test("dogfood readiness requires lock, account match, full region coverage and n
   assert.equal(ready.ready, true);
   assert.deepEqual(ready.blockers, []);
 
+  const disabledStage = evaluateAwsDogfoodReadiness(
+    {
+      ...stage,
+      enabled: false,
+    },
+    healthyDiscovery,
+    readinessOptions,
+  );
+
+  assert.equal(disabledStage.ready, false);
+  assert.ok(
+    disabledStage.blockers.some((value) =>
+      value.includes("Stage is disabled"),
+    ),
+  );
+
   const unlocked = evaluateAwsDogfoodReadiness(
     {
       ...stage,
       adoptionMode: "enabled",
+      enabled: true,
     },
     healthyDiscovery,
     readinessOptions,
@@ -746,6 +767,7 @@ test("adoption unlock preflight evaluates the proposed stage under the read-only
     primaryRegion: "ap-southeast-2",
     additionalRegions: ["us-east-1"],
     adoptionMode: "enabled" as const,
+    enabled: true,
   };
 
   const discovery = {
