@@ -92,6 +92,13 @@
         <button class="pill" type="submit">Refresh inventory</button>
       </form>
 
+      <a
+        class="pill"
+        href={'/p/' + data.project.slug + '/' + data.stage.name + '/discovery/report'}
+      >
+        Export discovery report
+      </a>
+
       <a class="pill" href={'/p/' + data.project.slug + '/' + data.stage.name}>
         Back to stage
       </a>
