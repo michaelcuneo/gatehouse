@@ -476,6 +476,15 @@ test("dogfood discovery report excludes AWS access credentials and carries adopt
       enabled: true,
     },
     discovery,
+    localImports: {
+      "resource-1": {
+        id: "local-resource-1",
+        kind: "storage_bucket",
+        ownership: "observed",
+        healthy: true,
+        status: "ready",
+      },
+    },
     exportedAt: "2026-09-26T11:00:00.000Z",
   });
 
@@ -491,6 +500,16 @@ test("dogfood discovery report excludes AWS access credentials and carries adopt
   assert.equal(
     report.discovery.resources[0]?.adoption.state,
     "importable",
+  );
+  assert.deepEqual(
+    report.discovery.resources[0]?.localImport,
+    {
+      id: "local-resource-1",
+      kind: "storage_bucket",
+      ownership: "observed",
+      healthy: true,
+      status: "ready",
+    },
   );
 
   const serialized = JSON.stringify(report);
