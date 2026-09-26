@@ -73,21 +73,29 @@ function discoveredResource(
   );
 }
 
-function importedResource(discoveryId: string) {
+function importedResource(
+  stageId: string,
+  discoveryId: string
+) {
   return (
     listResources().find(
       (resource) =>
         resource.metadata?.importedFrom?.provider === 'aws' &&
-        resource.metadata.importedFrom.discoveryId === discoveryId
+        resource.metadata.importedFrom.discoveryId === discoveryId &&
+        listStageIdsForResource(resource.id).includes(stageId)
     ) ?? null
   );
 }
 
 function importedResourceForDiscovered(
+  stageId: string,
   discovered: AwsDiscoveredResource,
   discovery: AwsStageDiscovery
 ) {
-  const direct = importedResource(discovered.id);
+  const direct = importedResource(
+    stageId,
+    discovered.id
+  );
 
   if (direct) {
     return direct;
@@ -111,7 +119,9 @@ function importedResourceForDiscovered(
           discovered.details?.aliasDnsName
     );
 
-    return pair ? importedResource(pair.id) : null;
+    return pair
+      ? importedResource(stageId, pair.id)
+      : null;
   }
 
   return null;
@@ -715,7 +725,8 @@ export const load: PageServerLoad = async ({ params }) => {
       .filter(
         (resource) =>
           resource.metadata?.importedFrom?.provider === 'aws' &&
-          resource.metadata.importedFrom.accountId === context.stage.accountId
+          resource.metadata.importedFrom.accountId === context.stage.accountId &&
+          listStageIdsForResource(resource.id).includes(context.stage.id)
       )
       .map((resource) => [
         resource.metadata!.importedFrom!.discoveryId,
@@ -876,6 +887,7 @@ export const actions: Actions = {
 
     for (const child of children) {
       const imported = importedResourceForDiscovered(
+        context.stage.id,
         child,
         discovery
       );
@@ -1184,6 +1196,7 @@ export const actions: Actions = {
 
       for (const child of previousChildren) {
         const imported = importedResourceForDiscovered(
+          context.stage.id,
           child,
           before
         );
@@ -1326,7 +1339,10 @@ export const actions: Actions = {
       });
     }
 
-    const existing = importedResource(discoveryId);
+    const existing = importedResource(
+      context.stage.id,
+      discoveryId
+    );
 
     if (existing) {
       return fail(409, {
