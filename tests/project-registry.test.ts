@@ -79,6 +79,10 @@ test("project registry persists and resolves multi-stage projects", async () => 
       bySlug?.stages[0]?.capabilities.functions,
       true,
     );
+    assert.equal(
+      bySlug?.stages[0]?.adoptionMode,
+      "read_only",
+    );
 
     const stageByName = db.getManagedStage(
       "example",
@@ -115,6 +119,7 @@ test("project registry persists and resolves multi-stage projects", async () => 
             costs: false,
           },
           selectors: [],
+          adoptionMode: "enabled",
           enabled: false,
         },
       ],
@@ -134,6 +139,12 @@ test("project registry persists and resolves multi-stage projects", async () => 
         (stage) => stage.id === "stage-staging",
       )?.access.mode,
       "assume-role",
+    );
+    assert.equal(
+      updated?.stages.find(
+        (stage) => stage.id === "stage-staging",
+      )?.adoptionMode,
+      "enabled",
     );
 
     assert.equal(db.deleteManagedProject("example"), true);
