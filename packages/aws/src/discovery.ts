@@ -16,7 +16,10 @@ import {
   DescribeCertificateCommand,
   ListCertificatesCommand,
 } from "@aws-sdk/client-acm";
-import { ListDistributionsCommand } from "@aws-sdk/client-cloudfront";
+import {
+  GetDistributionCommand,
+  ListDistributionsCommand,
+} from "@aws-sdk/client-cloudfront";
 import { ListFunctionsCommand } from "@aws-sdk/client-lambda";
 import {
   DescribeTableCommand,
@@ -558,10 +561,16 @@ async function discoverCloudFront(
     for (const distribution of list?.Items ?? []) {
       if (!distribution.Id) continue;
 
-      const origins = distribution.Origins?.Items ?? [];
+      const hydrated = await cloudFront.send(
+        new GetDistributionCommand({
+          Id: distribution.Id,
+        }),
+      );
+      const config = hydrated.Distribution?.DistributionConfig;
+      const origins = config?.Origins?.Items ?? [];
       const origin = origins[0];
-      const defaultBehavior = distribution.DefaultCacheBehavior;
-      const aliases = distribution.Aliases?.Items ?? [];
+      const defaultBehavior = config?.DefaultCacheBehavior;
+      const aliases = config?.Aliases?.Items ?? [];
 
       resources.push(
         discovered(
@@ -580,10 +589,10 @@ async function discoverCloudFront(
               status: distribution.Status ?? "Unknown",
               domainName: distribution.DomainName ?? null,
               defaultRootObject:
-                distribution.DefaultRootObject ?? "",
+                config?.DefaultRootObject ?? "",
               aliases: JSON.stringify(aliases),
               certificateArn:
-                distribution.ViewerCertificate?.ACMCertificateArn ?? null,
+                config?.ViewerCertificate?.ACMCertificateArn ?? null,
               originCount: origins.length,
               originId: origin?.Id ?? null,
               originDomainName: origin?.DomainName ?? null,
@@ -596,7 +605,7 @@ async function discoverCloudFront(
               functionAssociations:
                 defaultBehavior?.FunctionAssociations?.Quantity ?? 0,
               cacheBehaviors:
-                distribution.CacheBehaviors?.Quantity ?? 0,
+                config?.CacheBehaviors?.Quantity ?? 0,
             },
           },
           ownership,
