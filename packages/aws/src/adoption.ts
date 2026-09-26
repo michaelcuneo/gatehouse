@@ -588,6 +588,7 @@ export interface AwsDiscoveryDogfoodReport {
     scannedAt: string;
     regions: string[];
     warnings: string[];
+    coverage: import("./discovery").AwsDiscoveryCoverageEntry[];
     stacks: import("./discovery").AwsDiscoveredStack[];
     summary: ReturnType<typeof summarizeAwsDiscoveryAdoption>;
     dogfoodReadiness: AwsDogfoodReadiness;
@@ -651,6 +652,7 @@ export function buildAwsDiscoveryDogfoodReport(input: {
       scannedAt: discovery.scannedAt,
       regions: discovery.regions,
       warnings: discovery.warnings,
+      coverage: discovery.coverage ?? [],
       stacks: discovery.stacks,
       summary: summarizeAwsDiscoveryAdoption(discovery.resources),
       dogfoodReadiness: evaluateAwsDogfoodReadiness(
@@ -682,6 +684,7 @@ export interface AwsDogfoodReadinessCheck {
     | "account_match"
     | "region_coverage"
     | "snapshot_freshness"
+    | "service_coverage"
     | "discovery_warnings";
   ok: boolean;
   message: string;
@@ -691,6 +694,58 @@ export interface AwsDogfoodReadiness {
   ready: boolean;
   checks: AwsDogfoodReadinessCheck[];
   blockers: string[];
+}
+
+function discoveryCoverageKey(
+  service: import("./discovery").AwsDiscoveredResource["service"],
+  region: string,
+): string {
+  return `${service}\0${region}`;
+}
+
+function expectedDiscoveryCoverage(
+  stage: Pick<
+    ManagedStage,
+    "primaryRegion" | "additionalRegions"
+  >,
+): Array<{
+  service: import("./discovery").AwsDiscoveredResource["service"];
+  region: string;
+}> {
+  const regions = [
+    ...new Set([
+      stage.primaryRegion,
+      ...(stage.additionalRegions ?? []),
+    ].filter(Boolean)),
+  ];
+  const acmRegions = [...new Set([...regions, "us-east-1"])];
+  const expected: Array<{
+    service: import("./discovery").AwsDiscoveredResource["service"];
+    region: string;
+  }> = [
+    { service: "s3", region: "global" },
+    { service: "route53", region: "global" },
+    { service: "cloudfront", region: "global" },
+  ];
+
+  for (const region of regions) {
+    expected.push(
+      { service: "cloudformation", region },
+      { service: "lambda", region },
+      { service: "dynamodb", region },
+      { service: "logs", region },
+      { service: "cloudwatch", region },
+    );
+  }
+
+  for (const region of acmRegions) {
+    expected.push({
+      service: "acm",
+      region,
+    });
+  }
+
+  return expected;
 }
 
 export function evaluateAwsDogfoodReadiness(
@@ -724,6 +779,29 @@ export function evaluateAwsDogfoodReadiness(
       )
     : configuredRegions;
   const warnings = discovery?.warnings ?? [];
+  const coverage = discovery?.coverage ?? [];
+  const coverageByKey = new Map(
+    coverage.map((entry) => [
+      discoveryCoverageKey(entry.service, entry.region),
+      entry,
+    ]),
+  );
+  const expectedCoverage = expectedDiscoveryCoverage(stage);
+  const missingCoverage = discovery
+    ? expectedCoverage.filter(
+        (entry) =>
+          !coverageByKey.has(
+            discoveryCoverageKey(entry.service, entry.region),
+          ),
+      )
+    : expectedCoverage;
+  const warningCoverage = coverage.filter(
+    (entry) => entry.status !== "complete",
+  );
+  const serviceCoverageComplete =
+    Boolean(discovery) &&
+    missingCoverage.length === 0 &&
+    warningCoverage.length === 0;
   const now = options.now ?? Date.now();
   const maxSnapshotAgeMs = Math.max(
     options.maxSnapshotAgeMs ?? 15 * 60_000,
@@ -774,6 +852,21 @@ export function evaluateAwsDogfoodReadiness(
           : snapshotFresh
             ? "Discovery snapshot is fresh enough for dogfood validation."
             : `Discovery snapshot is stale (${Math.round(snapshotAgeMs / 60_000)} minutes old).`,
+    },
+    {
+      id: "service_coverage",
+      ok: serviceCoverageComplete,
+      message: !discovery
+        ? "No AWS service discovery coverage is available."
+        : missingCoverage.length
+          ? `Discovery did not run all expected service probes: ${missingCoverage
+              .map((entry) => `${entry.service} (${entry.region})`)
+              .join(", ")}.`
+          : warningCoverage.length
+            ? `Discovery reported incomplete service probes: ${warningCoverage
+                .map((entry) => entry.label)
+                .join(", ")}.`
+            : "All expected AWS service probes completed.",
     },
     {
       id: "discovery_warnings",
