@@ -9,111 +9,13 @@
     data.discovery.resources.filter((resource) => resource.ownership === 'observed')
   );
 
-  const supportsImport = (resource: (typeof data.discovery.resources)[number]) => {
-    if (
-      resource.service === 's3' &&
-      resource.resourceType === 'AWS::S3::Bucket'
-    ) {
-      const flags = [
-        resource.details?.blockPublicAcls === true,
-        resource.details?.ignorePublicAcls === true,
-        resource.details?.blockPublicPolicy === true,
-        resource.details?.restrictPublicBuckets === true
-      ];
+  const supportsImport = (
+    resource: (typeof data.discovery.resources)[number]
+  ) => data.adoption[resource.id]?.importable === true;
 
-      return flags.every(Boolean) || flags.every((value) => !value);
-    }
-
-    if (
-      resource.service === 'acm' &&
-      resource.resourceType === 'AWS::CertificateManager::Certificate'
-    ) {
-      return Boolean(resource.arn && resource.details?.domains);
-    }
-
-    if (
-      resource.service === 'dynamodb' &&
-      resource.resourceType === 'AWS::DynamoDB::Table'
-    ) {
-      return (
-        Number(resource.details?.globalSecondaryIndexes ?? 0) === 0 &&
-        Number(resource.details?.localSecondaryIndexes ?? 0) === 0 &&
-        typeof resource.details?.partitionKey === 'string' &&
-        ['S', 'N', 'B'].includes(
-          String(resource.details?.partitionKeyType ?? '')
-        ) &&
-        ['PAY_PER_REQUEST', 'PROVISIONED'].includes(
-          String(resource.details?.billingMode ?? '')
-        )
-      );
-    }
-
-    if (
-      resource.service === 'cloudfront' &&
-      resource.resourceType === 'AWS::CloudFront::Distribution'
-    ) {
-      return (
-        resource.details?.originCount === 1 &&
-        resource.details?.originIsS3 === true &&
-        resource.details?.defaultTargetOriginId ===
-          resource.details?.originId &&
-        Number(resource.details?.cacheBehaviors ?? 0) === 0 &&
-        Number(resource.details?.lambdaAssociations ?? 0) === 0 &&
-        Number(resource.details?.functionAssociations ?? 0) === 0
-      );
-    }
-
-    if (
-      resource.service === 'lambda' &&
-      resource.resourceType === 'AWS::Lambda::Function'
-    ) {
-      return (
-        typeof resource.details?.roleArn === 'string' &&
-        typeof resource.details?.memorySize === 'number' &&
-        typeof resource.details?.timeout === 'number' &&
-        ['x86_64', 'arm64'].includes(
-          String(resource.details?.architecture ?? '')
-        )
-      );
-    }
-
-    if (
-      resource.service === 'route53' &&
-      resource.resourceType === 'AWS::Route53::RecordSet'
-    ) {
-      if (resource.details?.alias === true) {
-        if (
-          resource.details?.type !== 'A' ||
-          typeof resource.details?.zone !== 'string' ||
-          typeof resource.details?.aliasDnsName !== 'string'
-        ) {
-          return false;
-        }
-
-        return data.discovery.resources.some(
-          (candidate) =>
-            candidate.service === 'route53' &&
-            candidate.resourceType === 'AWS::Route53::RecordSet' &&
-            candidate.name === resource.name &&
-            candidate.details?.zone === resource.details?.zone &&
-            candidate.details?.type === 'AAAA' &&
-            candidate.details?.alias === true &&
-            candidate.details?.aliasDnsName ===
-              resource.details?.aliasDnsName
-        );
-      }
-
-      return (
-        resource.details?.valueCount === 1 &&
-        ['A', 'AAAA', 'CNAME', 'TXT'].includes(String(resource.details?.type ?? '')) &&
-        typeof resource.details?.zone === 'string' &&
-        typeof resource.details?.value === 'string' &&
-        typeof resource.details?.ttl === 'number'
-      );
-    }
-
-    return false;
-  };
+  const adoptionFor = (
+    resource: (typeof data.discovery.resources)[number]
+  ) => data.adoption[resource.id];
 
   const importedFor = (
     resource: (typeof data.discovery.resources)[number]
@@ -194,6 +96,39 @@
         Back to stage
       </a>
     </div>
+
+  <section class="panel">
+    <span class="eyebrow">Adoption coverage</span>
+    <h2>AWS estate readiness</h2>
+    <div class="metric-grid dashboard-metrics">
+      <article class="metric">
+        <strong>{data.adoptionSummary.total}</strong>
+        <span class="muted">Discovered</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.importable}</strong>
+        <span class="muted">Importable</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.paired}</strong>
+        <span class="muted">Paired resources</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.inventoryOnly}</strong>
+        <span class="muted">Inventory only</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.external}</strong>
+        <span class="muted">Externally owned</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.observed}</strong>
+        <span class="muted">Observed</span>
+      </article>
+    </div>
+  </section>
+
+
   </div>
 
   <p class="muted mono">
@@ -456,6 +391,15 @@
             <tr>
               <td>
                 <strong>{resource.name}</strong>
+                {@const assessment = adoptionFor(resource)}
+                {#if assessment?.reason}
+                  <div class="muted">{assessment.reason}</div>
+                {/if}
+                {#if assessment?.requires?.length}
+                  <div class="muted">
+                    Requires: {assessment.requires.join(' · ')}
+                  </div>
+                {/if}
                 <div class="muted mono">{resource.resourceType}</div>
               </td>
 
