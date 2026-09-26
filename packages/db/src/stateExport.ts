@@ -35,6 +35,7 @@ const TABLE_COLUMNS = {
     "capabilities",
     "selectors",
     "manifest",
+    "adoption_mode",
     "enabled",
   ],
   managed_project_resources: [
@@ -241,7 +242,16 @@ export function restoreGateHouseState(
 
       for (const row of state.tables[table]) {
         statement.run(
-          ...columns.map((column) => row[column] ?? null),
+          ...columns.map((column) => {
+            if (
+              table === "managed_project_stages" &&
+              column === "adoption_mode"
+            ) {
+              return row[column] ?? "read_only";
+            }
+
+            return row[column] ?? null;
+          }),
         );
       }
     }
