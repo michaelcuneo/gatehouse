@@ -573,15 +573,11 @@
           </div>
 
           <div class="field">
-            <label for="architecture">Architecture</label>
-            <select
-              id="architecture"
-              name="architecture"
-              value={data.resource.spec.architecture}
-            >
-              <option value="x86_64">x86_64</option>
-              <option value="arm64">arm64</option>
-            </select>
+            <label>Architecture</label>
+            <input value={data.resource.spec.architecture} disabled />
+            <p class="muted">
+              Architecture follows the externally managed Lambda code package and is not changed by GateHouse.
+            </p>
           </div>
 
         {:else if data.resource.kind === 'static_site'}
