@@ -39,6 +39,7 @@ import {
   createResource,
   findImportedAwsResource,
   getResource,
+  listImportedAwsResourcesForStage,
   listResources,
   updateResource
 } from '@gatehouse/resources';
@@ -708,27 +709,22 @@ export const load: PageServerLoad = async ({ params }) => {
     await scan(context.stage.id, context.stage);
 
   const imported = Object.fromEntries(
-    listResources()
-      .filter(
-        (resource) =>
-          resource.metadata?.importedFrom?.provider === 'aws' &&
-          resource.metadata.importedFrom.accountId === context.stage.accountId &&
-          listStageIdsForResource(resource.id).includes(context.stage.id)
-      )
-      .map((resource) => [
-        resource.metadata!.importedFrom!.discoveryId,
-        {
-          id: resource.id,
-          kind: resource.kind,
-          ownership:
-            resource.metadata?.ownership?.mode ??
-            (resource.metadata?.managed === false
-              ? 'external'
-              : 'gatehouse'),
-          healthy: resource.runtime?.healthy ?? null,
-          status: resource.status
-        }
-      ])
+    listImportedAwsResourcesForStage(
+      context.stage.id
+    ).map((resource) => [
+      resource.metadata!.importedFrom!.discoveryId,
+      {
+        id: resource.id,
+        kind: resource.kind,
+        ownership:
+          resource.metadata?.ownership?.mode ??
+          (resource.metadata?.managed === false
+            ? 'external'
+            : 'gatehouse'),
+        healthy: resource.runtime?.healthy ?? null,
+        status: resource.status
+      }
+    ])
   );
 
   const stackMigrations = Object.fromEntries(
