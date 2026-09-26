@@ -190,3 +190,53 @@ test("disabled ready resources are not selected for routine reconciliation", () 
     false,
   );
 });
+
+
+test("observed and externally owned resources are never automatically reconciled", () => {
+  const observed = resource({
+    status: "pending",
+    metadata: {
+      managed: false,
+      ownership: {
+        mode: "observed",
+      },
+    },
+  });
+
+  const external = resource({
+    status: "error",
+    metadata: {
+      managed: false,
+      ownership: {
+        mode: "external",
+        externalOwner: {
+          type: "cloudformation",
+          id: "stack-1",
+          name: "stack",
+        },
+      },
+    },
+    runtime: {
+      healthy: false,
+      lastReconciledAt: "2026-09-26T11:00:00.000Z",
+    },
+  });
+
+  assert.equal(
+    resourceIsDue(
+      observed,
+      now,
+      timing,
+    ),
+    false,
+  );
+
+  assert.equal(
+    resourceIsDue(
+      external,
+      now,
+      timing,
+    ),
+    false,
+  );
+});
