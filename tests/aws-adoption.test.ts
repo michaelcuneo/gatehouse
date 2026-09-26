@@ -15,6 +15,54 @@ import {
   summarizeAwsDiscoveryAdoptionGaps,
 } from "../packages/aws/src/adoption.ts";
 
+function completeCoverage(regions: string[]) {
+  const uniqueRegions = [...new Set(regions)];
+  const acmRegions = [...new Set([...uniqueRegions, "us-east-1"])];
+  const entries = [
+    { service: "s3", region: "global", label: "S3" },
+    { service: "route53", region: "global", label: "Route53" },
+    { service: "cloudfront", region: "global", label: "CloudFront" },
+    ...uniqueRegions.flatMap((region) => [
+      {
+        service: "cloudformation",
+        region,
+        label: `CloudFormation (${region})`,
+      },
+      {
+        service: "lambda",
+        region,
+        label: `Lambda (${region})`,
+      },
+      {
+        service: "dynamodb",
+        region,
+        label: `DynamoDB (${region})`,
+      },
+      {
+        service: "logs",
+        region,
+        label: `CloudWatch Logs (${region})`,
+      },
+      {
+        service: "cloudwatch",
+        region,
+        label: `CloudWatch Alarms (${region})`,
+      },
+    ]),
+    ...acmRegions.map((region) => ({
+      service: "acm",
+      region,
+      label: `ACM (${region})`,
+    })),
+  ];
+
+  return entries.map((entry) => ({
+    ...entry,
+    status: "complete" as const,
+    discovered: 0,
+  }));
+}
+
 function discovered(
   service: any,
   resourceType: string,
@@ -396,6 +444,10 @@ test("dogfood discovery report excludes AWS access credentials and carries adopt
     regions: ["ap-southeast-2", "us-east-1"],
     stacks: [],
     warnings: [],
+    coverage: completeCoverage([
+      "ap-southeast-2",
+      "us-east-1",
+    ]),
     resources: [
       discovered("s3", "AWS::S3::Bucket", {
         blockPublicAcls: true,
@@ -462,6 +514,10 @@ test("dogfood readiness requires lock, account match, full region coverage and n
     stacks: [],
     resources: [],
     warnings: [],
+    coverage: completeCoverage([
+      "ap-southeast-2",
+      "us-east-1",
+    ]),
   } as any;
 
   const readinessOptions = {
@@ -538,6 +594,28 @@ test("dogfood readiness requires lock, account match, full region coverage and n
   assert.ok(
     warned.blockers.some((value) =>
       value.includes("1 warning"),
+    ),
+  );
+
+  const incompleteCoverage = evaluateAwsDogfoodReadiness(
+    stage,
+    {
+      ...healthyDiscovery,
+      coverage: healthyDiscovery.coverage.filter(
+        (entry: any) =>
+          !(
+            entry.service === "lambda" &&
+            entry.region === "us-east-1"
+          ),
+      ),
+    },
+    readinessOptions,
+  );
+
+  assert.equal(incompleteCoverage.ready, false);
+  assert.ok(
+    incompleteCoverage.blockers.some((value) =>
+      value.includes("lambda (us-east-1)"),
     ),
   );
 
