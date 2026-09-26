@@ -661,6 +661,7 @@ export interface AwsDogfoodReadinessCheck {
     | "read_only_lock"
     | "account_match"
     | "region_coverage"
+    | "snapshot_freshness"
     | "discovery_warnings";
   ok: boolean;
   message: string;
@@ -681,6 +682,10 @@ export function evaluateAwsDogfoodReadiness(
     | "adoptionMode"
   >,
   discovery: import("./discovery").AwsStageDiscovery | null,
+  options: {
+    now?: number;
+    maxSnapshotAgeMs?: number;
+  } = {},
 ): AwsDogfoodReadiness {
   const configuredRegions = [
     ...new Set([
@@ -699,6 +704,19 @@ export function evaluateAwsDogfoodReadiness(
       )
     : configuredRegions;
   const warnings = discovery?.warnings ?? [];
+  const now = options.now ?? Date.now();
+  const maxSnapshotAgeMs = Math.max(
+    options.maxSnapshotAgeMs ?? 15 * 60_000,
+    60_000,
+  );
+  const scannedAt = discovery
+    ? Date.parse(discovery.scannedAt)
+    : Number.NaN;
+  const snapshotAgeMs = Number.isFinite(scannedAt)
+    ? Math.max(now - scannedAt, 0)
+    : Number.POSITIVE_INFINITY;
+  const snapshotFresh =
+    Boolean(discovery) && snapshotAgeMs <= maxSnapshotAgeMs;
 
   const checks: AwsDogfoodReadinessCheck[] = [
     {
@@ -725,6 +743,17 @@ export function evaluateAwsDogfoodReadiness(
         : missingRegions.length === 0
           ? "All configured AWS regions are represented in discovery."
           : `Discovery is missing configured region(s): ${missingRegions.join(", ")}.`,
+    },
+    {
+      id: "snapshot_freshness",
+      ok: snapshotFresh,
+      message: !discovery
+        ? "No discovery snapshot exists."
+        : !Number.isFinite(scannedAt)
+          ? "Discovery snapshot timestamp is invalid."
+          : snapshotFresh
+            ? "Discovery snapshot is fresh enough for dogfood validation."
+            : `Discovery snapshot is stale (${Math.round(snapshotAgeMs / 60_000)} minutes old).`,
     },
     {
       id: "discovery_warnings",
