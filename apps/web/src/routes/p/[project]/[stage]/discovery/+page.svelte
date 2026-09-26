@@ -177,6 +177,50 @@
     </div>
   </section>
 
+  <section class="panel table-panel">
+    <span class="eyebrow">Discovery coverage</span>
+    <h2>AWS service probes</h2>
+    <p class="muted">
+      A completed probe with zero resources means GateHouse successfully checked that
+      service scope and found nothing. Warning probes are incomplete and block adoption safety.
+    </p>
+
+    {#if data.discovery.coverage?.length}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Probe</th>
+            <th>Region</th>
+            <th>Status</th>
+            <th>Discovered</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.discovery.coverage as coverage}
+            <tr>
+              <td>{coverage.label}</td>
+              <td class="mono">{coverage.region}</td>
+              <td>
+                <span class={coverage.status === 'complete' ? 'status status-ready' : 'status status-error'}>
+                  {coverage.status}
+                </span>
+              </td>
+              <td>{coverage.discovered}</td>
+              <td class={coverage.message ? 'error' : 'muted'}>
+                {coverage.message ?? 'Probe completed'}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <p class="error">
+        This snapshot predates service-probe coverage tracking. Refresh inventory before using it for adoption safety.
+      </p>
+    {/if}
+  </section>
+
   {#if data.adoptionGaps.length}
     <section class="panel table-panel">
       <span class="eyebrow">Coverage gaps</span>
