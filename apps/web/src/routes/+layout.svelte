@@ -42,7 +42,8 @@
       items: [
         { label: 'Reconciliation', href: '/runtime/reconciliation' },
         { label: 'Providers', href: '/runtime/providers' },
-        { label: 'Generated Config', href: '/runtime/generated' }
+        { label: 'Generated Config', href: '/runtime/generated' },
+        { label: 'Backup', href: '/runtime/backup' }
       ]
     },
     {
