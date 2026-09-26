@@ -14,7 +14,7 @@
   );
 
   const adoptionSafetyBlocked = $derived(
-    !adoptionMutationBlocked && !data.adoptionSafety.ready
+    !adoptionLocked && !data.adoptionSafety.ready
   );
 
   const adoptionMutationBlocked = $derived(
@@ -117,7 +117,7 @@
     </div>
   </div>
 
-  {#if adoptionMutationBlocked}
+  {#if adoptionLocked}
     <section class="panel">
       <span class="eyebrow">Read-only dogfood mode</span>
       <h2>AWS mutation lock active</h2>
