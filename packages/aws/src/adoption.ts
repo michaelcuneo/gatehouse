@@ -598,6 +598,13 @@ export interface AwsDiscoveryDogfoodReport {
     resources: Array<
       import("./discovery").AwsDiscoveredResource & {
         adoption: AwsDiscoveryAdoptionAssessment;
+        localImport?: {
+          id: string;
+          kind: string;
+          ownership: "gatehouse" | "external" | "observed";
+          healthy: boolean | null;
+          status: string;
+        };
       }
     >;
   };
@@ -620,6 +627,16 @@ export function buildAwsDiscoveryDogfoodReport(input: {
     | "enabled"
   >;
   discovery: import("./discovery").AwsStageDiscovery;
+  localImports?: Record<
+    string,
+    {
+      id: string;
+      kind: string;
+      ownership: "gatehouse" | "external" | "observed";
+      healthy: boolean | null;
+      status: string;
+    }
+  >;
   exportedAt?: string;
 }): AwsDiscoveryDogfoodReport {
   const { discovery } = input;
@@ -675,6 +692,12 @@ export function buildAwsDiscoveryDogfoodReport(input: {
           resource,
           discovery.resources,
         ),
+        ...(input.localImports?.[resource.id]
+          ? {
+              localImport:
+                input.localImports[resource.id],
+            }
+          : {}),
       })),
     },
   };
