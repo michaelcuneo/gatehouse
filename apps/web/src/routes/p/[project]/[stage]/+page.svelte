@@ -127,6 +127,18 @@
             <span class="muted">Discovery warnings</span>
           </article>
 
+          {#if data.dogfood.coverage}
+            <article class="metric">
+              <strong>{data.dogfood.coverage.complete}/{data.dogfood.coverage.total}</strong>
+              <span class="muted">Service probes complete</span>
+            </article>
+
+            <article class="metric">
+              <strong>{data.dogfood.coverage.warning}</strong>
+              <span class="muted">Probe warnings</span>
+            </article>
+          {/if}
+
           {#if data.dogfood.summary}
             <article class="metric">
               <strong>{data.dogfood.summary.importable}</strong>
