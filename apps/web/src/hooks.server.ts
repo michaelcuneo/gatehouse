@@ -1,3 +1,5 @@
+import type { Handle } from '@sveltejs/kit';
+
 import { initDatabase } from '@gatehouse/db';
 import {
   checkAllResourceHealth,
@@ -5,7 +7,8 @@ import {
 } from '@gatehouse/reconciliation';
 import {
   beginRuntimeOperation,
-  ensureRuntime
+  ensureRuntime,
+  runtimeMaintenanceActive
 } from '@gatehouse/runtime';
 
 let initialized = false;
@@ -185,3 +188,23 @@ export async function init() {
 
   console.log('GateHouse runtime initialized');
 }
+
+export const handle: Handle = async ({ event, resolve }) => {
+  if (
+    runtimeMaintenanceActive() &&
+    event.request.method !== 'GET' &&
+    event.request.method !== 'HEAD'
+  ) {
+    return new Response(
+      'GateHouse runtime maintenance is active',
+      {
+        status: 503,
+        headers: {
+          'retry-after': '5'
+        }
+      }
+    );
+  }
+
+  return resolve(event);
+};
