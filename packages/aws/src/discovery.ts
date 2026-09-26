@@ -25,6 +25,12 @@ import {
   DescribeTableCommand,
   ListTablesCommand,
 } from "@aws-sdk/client-dynamodb";
+import {
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
+  DescribeAlarmsCommand,
+} from "@aws-sdk/client-cloudwatch";
 
 import type { ManagedStage } from "@gatehouse/core";
 
@@ -49,7 +55,9 @@ export interface AwsDiscoveredResource {
     | "acm"
     | "cloudfront"
     | "lambda"
-    | "dynamodb";
+    | "dynamodb"
+    | "logs"
+    | "cloudwatch";
   resourceType: string;
   name: string;
   physicalId: string;
@@ -810,6 +818,143 @@ async function discoverDynamoDb(
   return resources;
 }
 
+
+async function discoverLogGroups(
+  stage: ManagedStage,
+  region: string,
+  ownership: Map<string, StackOwnershipIndexEntry>,
+): Promise<AwsDiscoveredResource[]> {
+  const logs = awsClientsForStage(stage, region).cloudWatchLogs;
+  const resources: AwsDiscoveredResource[] = [];
+  let nextToken: string | undefined;
+
+  do {
+    const result = await logs.send(
+      new DescribeLogGroupsCommand({
+        nextToken,
+      }),
+    );
+
+    for (const group of result.logGroups ?? []) {
+      const name = group.logGroupName;
+
+      if (!name) continue;
+
+      resources.push(
+        discovered(
+          {
+            id: `logs:${region}:${name}`,
+            service: "logs",
+            resourceType: "AWS::Logs::LogGroup",
+            name,
+            physicalId: name,
+            arn: group.arn,
+            region,
+            details: {
+              retentionInDays: group.retentionInDays ?? null,
+              storedBytes: group.storedBytes ?? null,
+              creationTime: group.creationTime ?? null,
+              kmsKeyId: group.kmsKeyId ?? null,
+              logGroupClass: group.logGroupClass ?? null,
+              dataProtectionStatus:
+                group.dataProtectionStatus ?? null,
+            },
+          },
+          ownership,
+        ),
+      );
+    }
+
+    nextToken = result.nextToken;
+  } while (nextToken);
+
+  return resources;
+}
+
+async function discoverCloudWatchAlarms(
+  stage: ManagedStage,
+  region: string,
+  ownership: Map<string, StackOwnershipIndexEntry>,
+): Promise<AwsDiscoveredResource[]> {
+  const cloudWatch = awsClientsForStage(stage, region).cloudWatch;
+  const resources: AwsDiscoveredResource[] = [];
+  let nextToken: string | undefined;
+
+  do {
+    const result = await cloudWatch.send(
+      new DescribeAlarmsCommand({
+        NextToken: nextToken,
+      }),
+    );
+
+    for (const alarm of result.MetricAlarms ?? []) {
+      const name = alarm.AlarmName;
+
+      if (!name) continue;
+
+      resources.push(
+        discovered(
+          {
+            id: `cloudwatch:${region}:alarm:${name}`,
+            service: "cloudwatch",
+            resourceType: "AWS::CloudWatch::Alarm",
+            name,
+            physicalId: name,
+            arn: alarm.AlarmArn,
+            region,
+            details: {
+              stateValue: alarm.StateValue ?? null,
+              stateReason: alarm.StateReason ?? null,
+              metricName: alarm.MetricName ?? null,
+              namespace: alarm.Namespace ?? null,
+              statistic: alarm.Statistic ?? null,
+              period: alarm.Period ?? null,
+              evaluationPeriods:
+                alarm.EvaluationPeriods ?? null,
+              actionsEnabled:
+                alarm.ActionsEnabled ?? null,
+            },
+          },
+          ownership,
+        ),
+      );
+    }
+
+    for (const alarm of result.CompositeAlarms ?? []) {
+      const name = alarm.AlarmName;
+
+      if (!name) continue;
+
+      resources.push(
+        discovered(
+          {
+            id: `cloudwatch:${region}:composite-alarm:${name}`,
+            service: "cloudwatch",
+            resourceType:
+              "AWS::CloudWatch::CompositeAlarm",
+            name,
+            physicalId: name,
+            arn: alarm.AlarmArn,
+            region,
+            details: {
+              stateValue: alarm.StateValue ?? null,
+              stateReason: alarm.StateReason ?? null,
+              actionsEnabled:
+                alarm.ActionsEnabled ?? null,
+              alarmRule: alarm.AlarmRule ?? null,
+            },
+          },
+          ownership,
+        ),
+      );
+    }
+
+    nextToken = result.NextToken;
+  } while (nextToken);
+
+  return resources;
+}
+
 export async function discoverAwsStage(
   stage: ManagedStage,
 ): Promise<AwsStageDiscovery> {
@@ -869,6 +1014,16 @@ export async function discoverAwsStage(
     );
     await collect(`DynamoDB (${region})`, () =>
       discoverDynamoDb(stage, region, ownership),
+    );
+    await collect(`CloudWatch Logs (${region})`, () =>
+      discoverLogGroups(stage, region, ownership),
+    );
+    await collect(`CloudWatch Alarms (${region})`, () =>
+      discoverCloudWatchAlarms(
+        stage,
+        region,
+        ownership,
+      ),
     );
   }
 
