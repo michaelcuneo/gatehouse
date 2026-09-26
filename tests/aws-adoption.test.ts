@@ -609,17 +609,26 @@ test("CloudWatch logs and alarms remain visible but inventory-only", () => {
     },
   } as any;
 
-  for (const resource of [logGroup, alarm]) {
-    const assessment = assessAwsDiscoveryResource(
-      resource,
-      [logGroup, alarm],
-    );
+  const logAssessment = assessAwsDiscoveryResource(
+    logGroup,
+    [logGroup, alarm],
+  );
+  const alarmAssessment = assessAwsDiscoveryResource(
+    alarm,
+    [logGroup, alarm],
+  );
 
-    assert.equal(assessment.state, "inventory_only");
-    assert.equal(assessment.importable, false);
-    assert.match(
-      assessment.reason ?? "",
-      /does not have a safe adoption model/i,
-    );
-  }
+  assert.equal(logAssessment.state, "inventory_only");
+  assert.equal(logAssessment.importable, false);
+  assert.match(
+    logAssessment.reason ?? "",
+    /first-class log-group resource/i,
+  );
+
+  assert.equal(alarmAssessment.state, "inventory_only");
+  assert.equal(alarmAssessment.importable, false);
+  assert.match(
+    alarmAssessment.reason ?? "",
+    /represent alarm metrics, dimensions, actions and evaluation settings exactly/i,
+  );
 });
