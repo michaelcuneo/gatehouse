@@ -31,6 +31,7 @@ type StageRow = {
   capabilities: string;
   selectors: string | null;
   manifest: string | null;
+  adoption_mode: "read_only" | "enabled";
   enabled: number;
 };
 
@@ -72,6 +73,10 @@ function stageFromRow(row: StageRow): ManagedStage {
     manifest: row.manifest
       ? parseJson<ProjectManifestLocation | undefined>(row.manifest, undefined)
       : undefined,
+    adoptionMode:
+      row.adoption_mode === "enabled"
+        ? "enabled"
+        : "read_only",
     enabled: row.enabled === 1,
   };
 }
@@ -199,9 +204,10 @@ export function saveManagedProject(project: ManagedProject): ManagedProject {
           capabilities,
           selectors,
           manifest,
+          adoption_mode,
           enabled
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           project_id = excluded.project_id,
           name = excluded.name,
@@ -212,6 +218,7 @@ export function saveManagedProject(project: ManagedProject): ManagedProject {
           capabilities = excluded.capabilities,
           selectors = excluded.selectors,
           manifest = excluded.manifest,
+          adoption_mode = excluded.adoption_mode,
           enabled = excluded.enabled
       `,
     );
@@ -228,6 +235,7 @@ export function saveManagedProject(project: ManagedProject): ManagedProject {
         JSON.stringify(stage.capabilities),
         JSON.stringify(stage.selectors ?? []),
         stage.manifest ? JSON.stringify(stage.manifest) : null,
+        stage.adoptionMode ?? "read_only",
         stage.enabled ? 1 : 0,
       );
     }
