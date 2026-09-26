@@ -386,10 +386,10 @@
         <tbody>
           {#each data.discovery.resources as resource}
             {@const imported = importedFor(resource)}
+            {@const assessment = adoptionFor(resource)}
             <tr>
               <td>
                 <strong>{resource.name}</strong>
-                {@const assessment = adoptionFor(resource)}
                 {#if assessment?.reason}
                   <div class="muted">{assessment.reason}</div>
                 {/if}
