@@ -7,6 +7,7 @@ import {
   assertImportableS3,
   assessAwsDiscoveryResource,
   awsStageAdoptionEnabled,
+  buildAwsDiscoveryDogfoodReport,
   s3BucketFromOriginDomain,
   summarizeAwsDiscoveryAdoption,
 } from "../packages/aws/src/adoption.ts";
@@ -382,4 +383,60 @@ test("stage adoption is locked by default and only explicit enabled mode unlocks
     }),
     true,
   );
+});
+
+
+test("dogfood discovery report excludes AWS access credentials and carries adoption assessments", () => {
+  const discovery = {
+    accountId: "123456789012",
+    scannedAt: "2026-09-26T10:00:00.000Z",
+    regions: ["ap-southeast-2"],
+    stacks: [],
+    warnings: [],
+    resources: [
+      discovered("s3", "AWS::S3::Bucket", {
+        blockPublicAcls: true,
+        ignorePublicAcls: true,
+        blockPublicPolicy: true,
+        restrictPublicBuckets: true,
+      }),
+    ],
+  } as any;
+
+  const report = buildAwsDiscoveryDogfoodReport({
+    project: {
+      id: "project-1",
+      name: "Example",
+      slug: "example",
+    },
+    stage: {
+      id: "stage-1",
+      name: "production",
+      accountId: "123456789012",
+      primaryRegion: "ap-southeast-2",
+      additionalRegions: ["us-east-1"],
+      adoptionMode: "read_only",
+    },
+    discovery,
+    exportedAt: "2026-09-26T11:00:00.000Z",
+  });
+
+  assert.equal(
+    report.format,
+    "gatehouse-aws-discovery-report",
+  );
+  assert.equal(report.version, 1);
+  assert.equal(report.stage.adoptionMode, "read_only");
+  assert.equal(report.discovery.summary.importable, 1);
+  assert.equal(
+    report.discovery.resources[0]?.adoption.state,
+    "importable",
+  );
+
+  const serialized = JSON.stringify(report);
+
+  assert.equal(serialized.includes("roleArn"), false);
+  assert.equal(serialized.includes("externalId"), false);
+  assert.equal(serialized.includes("sourceIdentity"), false);
+  assert.equal(serialized.includes('"access"'), false);
 });
