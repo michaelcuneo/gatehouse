@@ -3,7 +3,10 @@ import {
   checkAllResourceHealth,
   reconcileDueResources
 } from '@gatehouse/reconciliation';
-import { ensureRuntime } from '@gatehouse/runtime';
+import {
+  beginRuntimeOperation,
+  ensureRuntime
+} from '@gatehouse/runtime';
 
 let initialized = false;
 let healthTimer: ReturnType<typeof setInterval> | null = null;
@@ -88,6 +91,12 @@ function startHealthMonitor() {
       return;
     }
 
+    const finishOperation = beginRuntimeOperation();
+
+    if (!finishOperation) {
+      return;
+    }
+
     healthRunning = true;
 
     try {
@@ -96,6 +105,7 @@ function startHealthMonitor() {
       console.error('GateHouse health monitor failed', cause);
     } finally {
       healthRunning = false;
+      finishOperation();
     }
   };
 
@@ -123,6 +133,12 @@ function startReconciliationMonitor() {
       return;
     }
 
+    const finishOperation = beginRuntimeOperation();
+
+    if (!finishOperation) {
+      return;
+    }
+
     reconciliationRunning = true;
 
     try {
@@ -143,6 +159,7 @@ function startReconciliationMonitor() {
       );
     } finally {
       reconciliationRunning = false;
+      finishOperation();
     }
   };
 
