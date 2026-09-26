@@ -566,6 +566,7 @@ export interface AwsDiscoveryDogfoodReport {
     warnings: string[];
     stacks: import("./discovery").AwsDiscoveredStack[];
     summary: ReturnType<typeof summarizeAwsDiscoveryAdoption>;
+    gaps: AwsDiscoveryAdoptionGap[];
     resources: Array<
       import("./discovery").AwsDiscoveredResource & {
         adoption: AwsDiscoveryAdoptionAssessment;
@@ -618,6 +619,7 @@ export function buildAwsDiscoveryDogfoodReport(input: {
       warnings: discovery.warnings,
       stacks: discovery.stacks,
       summary: summarizeAwsDiscoveryAdoption(discovery.resources),
+      gaps: summarizeAwsDiscoveryAdoptionGaps(discovery.resources),
       resources: discovery.resources.map((resource) => ({
         ...resource,
         adoption: assessAwsDiscoveryResource(
@@ -720,4 +722,59 @@ export function evaluateAwsDogfoodReadiness(
     checks,
     blockers,
   };
+}
+
+
+export interface AwsDiscoveryAdoptionGap {
+  service: AwsDiscoveredResource["service"];
+  resourceType: string;
+  reason: string;
+  count: number;
+}
+
+export function summarizeAwsDiscoveryAdoptionGaps(
+  resources: AwsDiscoveredResource[],
+): AwsDiscoveryAdoptionGap[] {
+  const grouped = new Map<string, AwsDiscoveryAdoptionGap>();
+
+  for (const resource of resources) {
+    const assessment = assessAwsDiscoveryResource(
+      resource,
+      resources,
+    );
+
+    if (assessment.state !== "inventory_only") {
+      continue;
+    }
+
+    const reason =
+      assessment.reason ??
+      "GateHouse does not have a safe adoption model for this resource yet.";
+    const key = [
+      resource.service,
+      resource.resourceType,
+      reason,
+    ].join("\0");
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    grouped.set(key, {
+      service: resource.service,
+      resourceType: resource.resourceType,
+      reason,
+      count: 1,
+    });
+  }
+
+  return [...grouped.values()].sort(
+    (a, b) =>
+      b.count - a.count ||
+      a.service.localeCompare(b.service) ||
+      a.resourceType.localeCompare(b.resourceType) ||
+      a.reason.localeCompare(b.reason),
+  );
 }
