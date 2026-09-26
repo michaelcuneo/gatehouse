@@ -145,6 +145,7 @@ async function discoverStacks(
 ): Promise<{
   stacks: AwsDiscoveredStack[];
   ownership: Map<string, StackOwnershipIndexEntry>;
+  resources: AwsDiscoveredResource[];
 }> {
   const cloudFormation = awsClientsForStage(stage, region).cloudFormation;
   const summaries = [];
@@ -172,6 +173,8 @@ async function discoverStacks(
 
   const stacks: AwsDiscoveredStack[] = [];
   const ownership = new Map<string, StackOwnershipIndexEntry>();
+  const stackResources: AwsDiscoveredResource[] = [];
+  const resources: AwsDiscoveredResource[] = [];
 
   for (const summary of summaries) {
     const described = await cloudFormation.send(
@@ -221,10 +224,31 @@ async function discoverStacks(
       for (const key of normalisePhysicalId(physicalId)) {
         ownership.set(key, owner);
       }
+
+      resources.push({
+        id: `cloudformation:${region}:${summary.StackId}:${resource.LogicalResourceId ?? physicalId}`,
+        service: "cloudformation",
+        resourceType: resource.ResourceType ?? "Unknown",
+        name: resource.LogicalResourceId ?? physicalId,
+        physicalId,
+        region,
+        ownership: "external",
+        owner: {
+          type: owner.type,
+          id: owner.id,
+          name: owner.name,
+          logicalId: owner.logicalId,
+        },
+        details: {
+          stackName: summary.StackName!,
+          logicalId: resource.LogicalResourceId ?? null,
+          resourceStatus: resource.ResourceStatus ?? null,
+        },
+      });
     }
   }
 
-  return { stacks, ownership };
+  return { stacks, ownership, resources };
 }
 
 export function ownerFor(
@@ -761,11 +785,13 @@ export async function discoverAwsStage(
   const warnings: string[] = [];
   const stacks: AwsDiscoveredStack[] = [];
   const ownership = new Map<string, StackOwnershipIndexEntry>();
+  const stackResources: AwsDiscoveredResource[] = [];
 
   for (const region of regions) {
     try {
       const discoveredStacks = await discoverStacks(stage, region);
       stacks.push(...discoveredStacks.stacks);
+      stackResources.push(...discoveredStacks.resources);
 
       for (const [physicalId, owner] of discoveredStacks.ownership) {
         ownership.set(physicalId, owner);
@@ -811,6 +837,24 @@ export async function discoverAwsStage(
     await collect(`DynamoDB (${region})`, () =>
       discoverDynamoDb(stage, region, ownership),
     );
+  }
+
+  const representedPhysicalIds = new Set(
+    resources.flatMap((resource) =>
+      normalisePhysicalId(resource.physicalId),
+    ),
+  );
+
+  for (const resource of stackResources) {
+    const represented = normalisePhysicalId(
+      resource.physicalId,
+    ).some((physicalId) =>
+      representedPhysicalIds.has(physicalId),
+    );
+
+    if (!represented) {
+      resources.push(resource);
+    }
   }
 
   resources.sort((a, b) =>
