@@ -824,7 +824,7 @@ async function discoverLogGroups(
   region: string,
   ownership: Map<string, StackOwnershipIndexEntry>,
 ): Promise<AwsDiscoveredResource[]> {
-  const logs = awsClientsForStage(stage, region).cloudWatchLogs;
+  const logs = awsClientsForStage(stage, region).logs;
   const resources: AwsDiscoveredResource[] = [];
   let nextToken: string | undefined;
 
