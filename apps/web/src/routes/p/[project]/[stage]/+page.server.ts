@@ -99,6 +99,10 @@ export const actions: Actions = {
       .map((value) => value.trim())
       .filter(Boolean);
     const enabled = checkbox(form, 'enabled');
+    const adoptionMode =
+      text(form, 'adoptionMode') === 'enabled'
+        ? 'enabled'
+        : 'read_only';
 
     if (
       !stageName ||
@@ -203,6 +207,7 @@ export const actions: Actions = {
           'capability_diagnostics'
         )
       },
+      adoptionMode,
       selectors: logGroups.length
         ? [
             {
