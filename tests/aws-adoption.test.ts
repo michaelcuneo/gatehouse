@@ -6,6 +6,7 @@ import {
   assertImportableDynamoDB,
   assertImportableS3,
   assessAwsDiscoveryResource,
+  awsStageAdoptionEnabled,
   s3BucketFromOriginDomain,
   summarizeAwsDiscoveryAdoption,
 } from "../packages/aws/src/adoption.ts";
@@ -359,4 +360,26 @@ test("discovery summary separates importable, paired, inventory-only and ownersh
     external: 1,
     observed: 2,
   });
+});
+
+
+test("stage adoption is locked by default and only explicit enabled mode unlocks it", () => {
+  assert.equal(
+    awsStageAdoptionEnabled({}),
+    false,
+  );
+
+  assert.equal(
+    awsStageAdoptionEnabled({
+      adoptionMode: "read_only",
+    }),
+    false,
+  );
+
+  assert.equal(
+    awsStageAdoptionEnabled({
+      adoptionMode: "enabled",
+    }),
+    true,
+  );
 });
