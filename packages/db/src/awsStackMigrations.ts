@@ -71,6 +71,7 @@ export function prepareAwsStackMigration(
         region = excluded.region,
         status = 'prepared',
         updated_at = excluded.updated_at
+      WHERE aws_stack_migrations.status != 'detached'
     `,
   ).run(
     input.stageId,
