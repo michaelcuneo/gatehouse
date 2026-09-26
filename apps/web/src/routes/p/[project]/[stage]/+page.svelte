@@ -86,6 +86,20 @@
           <strong>{data.project.diagnosticsProfile ?? 'Generic AWS'}</strong>
           <span class="muted">semantic profile</span>
         </article>
+
+        <article class="panel metric">
+          <span class="eyebrow">AWS adoption</span>
+          <strong>
+            {(data.stage.adoptionMode ?? 'read_only') === 'enabled'
+              ? 'Enabled'
+              : 'Read-only'}
+          </strong>
+          <span class="muted">
+            {(data.stage.adoptionMode ?? 'read_only') === 'enabled'
+              ? 'imports and ownership actions allowed'
+              : 'dogfood safety lock active'}
+          </span>
+        </article>
       </div>
 
       {#if !data.aws.ok}
@@ -221,6 +235,22 @@
                 name="diagnosticsProfile"
                 value={data.project.diagnosticsProfile ?? ''}
               />
+            </div>
+
+            <div class="field">
+              <label for="adoptionMode">AWS adoption mode</label>
+              <select
+                id="adoptionMode"
+                name="adoptionMode"
+                value={data.stage.adoptionMode ?? 'read_only'}
+              >
+                <option value="read_only">Read-only dogfood</option>
+                <option value="enabled">Adoption enabled</option>
+              </select>
+              <p class="muted">
+                Read-only mode allows discovery, reports and inspection, but blocks imports,
+                ownership changes, stack migration progress and AWS adoption mutations.
+              </p>
             </div>
 
             <label class="check-field">
