@@ -337,7 +337,14 @@ export const actions: Actions = {
       }
     }
 
-    deleteAwsDiscoverySnapshot(context.stage.id);
+    if (
+      awsStageIdentityChanged(
+        context.stage,
+        updatedStage
+      )
+    ) {
+      deleteAwsDiscoverySnapshot(context.stage.id);
+    }
 
     const updatedProject = saveManagedProject({
       ...context.project,
