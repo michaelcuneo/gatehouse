@@ -117,3 +117,96 @@ test("manual reconciliation of an observed filesystem resource never mutates the
     delete process.env.GATEHOUSE_ROOT;
   }
 });
+
+
+test("manual reconciliation of an externally owned filesystem resource never mutates the filesystem", async () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gatehouse-external-reconcile-"),
+  );
+
+  process.env.GATEHOUSE_ROOT = root;
+
+  try {
+    const runtime = await import("../packages/runtime/src/index.ts");
+    const db = await import("../packages/db/src/index.ts");
+    const resources = await import("../packages/resources/src/index.ts");
+    const reconciliation = await import(
+      "../packages/reconciliation/src/reconcileResource.ts"
+    );
+
+    await runtime.ensureRuntime();
+    db.initDatabase();
+
+    const buildDirectory = path.join(root, "fixture-build");
+    const outputDirectory = path.join(root, "deployed-site");
+
+    fs.mkdirSync(buildDirectory, {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(buildDirectory, "index.html"),
+      "<h1>Externally owned</h1>",
+      "utf8",
+    );
+
+    const now = "2026-09-27T00:00:00.000Z";
+
+    resources.createResource({
+      id: "external-site",
+      kind: "static_site",
+      name: "external-site",
+      provider: "filesystem",
+      version: 1,
+      enabled: true,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+      metadata: {
+        managed: false,
+        ownership: {
+          mode: "external",
+          externalOwner: {
+            type: "cloudformation",
+            id: "stack-1",
+            name: "stack",
+          },
+        },
+      },
+      spec: {
+        contentMode: "managed",
+        buildDirectory,
+        outputDirectory,
+        deployOnChange: true,
+      },
+    });
+
+    await reconciliation.reconcileResource(
+      "external-site",
+    );
+
+    assert.equal(
+      fs.existsSync(outputDirectory),
+      false,
+    );
+
+    const stored = resources.getResource(
+      "external-site",
+    );
+
+    assert.equal(stored?.status, "ready");
+    assert.equal(
+      stored?.metadata?.ownership?.mode,
+      "external",
+    );
+    assert.match(
+      stored?.runtime?.lastStatusMessage ?? "",
+      /Externally managed resource; GateHouse mutation intentionally disabled/i,
+    );
+  } finally {
+    fs.rmSync(root, {
+      recursive: true,
+      force: true,
+    });
+    delete process.env.GATEHOUSE_ROOT;
+  }
+});
