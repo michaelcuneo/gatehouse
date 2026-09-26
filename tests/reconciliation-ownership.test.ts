@@ -210,3 +210,105 @@ test("manual reconciliation of an externally owned filesystem resource never mut
     delete process.env.GATEHOUSE_ROOT;
   }
 });
+
+
+test("an imported resource becomes reconciliation-eligible only after explicit GateHouse ownership transfer", async () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gatehouse-ownership-transition-"),
+  );
+
+  process.env.GATEHOUSE_ROOT = root;
+
+  try {
+    const runtime = await import("../packages/runtime/src/index.ts");
+    const db = await import("../packages/db/src/index.ts");
+    const resources = await import("../packages/resources/src/index.ts");
+    const scheduler = await import(
+      "../packages/reconciliation/src/reconcileDueResources.ts"
+    );
+
+    await runtime.ensureRuntime();
+    db.initDatabase();
+
+    const nowIso = "2026-09-27T00:00:00.000Z";
+    const now = Date.parse(
+      "2026-09-27T00:01:00.000Z",
+    );
+    const timing = {
+      errorRetryMs: 60_000,
+      unhealthyRetryMs: 30_000,
+      deployOnChangeMs: 15_000,
+      staleReconcileMs: 300_000,
+    };
+
+    resources.createResource({
+      id: "adoptable-site",
+      kind: "static_site",
+      name: "adoptable-site",
+      provider: "filesystem",
+      version: 1,
+      enabled: true,
+      status: "pending",
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      metadata: {
+        managed: false,
+        ownership: {
+          mode: "observed",
+        },
+      },
+      spec: {
+        contentMode: "external",
+        buildDirectory: "",
+        outputDirectory: path.join(root, "site"),
+        deployOnChange: false,
+      },
+    });
+
+    const observed = resources.getResource(
+      "adoptable-site",
+    );
+
+    assert.ok(observed);
+    assert.equal(
+      scheduler.resourceIsDue(
+        observed as any,
+        now,
+        timing,
+      ),
+      false,
+    );
+
+    const controlled = resources.updateResource({
+      ...observed!,
+      metadata: {
+        ...(observed!.metadata ?? {}),
+        managed: true,
+        ownership: {
+          mode: "gatehouse",
+        },
+      },
+    } as any);
+
+    assert.equal(
+      controlled.metadata?.ownership?.mode,
+      "gatehouse",
+    );
+    assert.equal(controlled.status, "pending");
+    assert.equal(controlled.version, 2);
+    assert.equal(
+      scheduler.resourceIsDue(
+        controlled as any,
+        now,
+        timing,
+      ),
+      true,
+    );
+  } finally {
+    fs.rmSync(root, {
+      recursive: true,
+      force: true,
+    });
+    delete process.env.GATEHOUSE_ROOT;
+  }
+});
