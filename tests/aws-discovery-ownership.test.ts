@@ -168,3 +168,71 @@ test("generic CloudFormation child inventory only fills unsupported discovery ga
     ["route53:record", "cloudformation:queue"],
   );
 });
+
+
+test("native observability discovery suppresses duplicate stack fallbacks without hiding unsupported children", () => {
+  const specific = [
+    {
+      id: "logs:ap-southeast-2:/aws/lambda/api",
+      service: "logs",
+      resourceType: "AWS::Logs::LogGroup",
+      name: "/aws/lambda/api",
+      physicalId: "/aws/lambda/api",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "cloudwatch:ap-southeast-2:alarm:api-errors",
+      service: "cloudwatch",
+      resourceType: "AWS::CloudWatch::Alarm",
+      name: "api-errors",
+      physicalId: "api-errors",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+  ] as any[];
+
+  const fallbacks = [
+    {
+      id: "cloudformation:log-group",
+      service: "cloudformation",
+      resourceType: "AWS::Logs::LogGroup",
+      name: "ApiLogGroup",
+      physicalId: "/aws/lambda/api",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "cloudformation:alarm",
+      service: "cloudformation",
+      resourceType: "AWS::CloudWatch::Alarm",
+      name: "ApiAlarm",
+      physicalId: "api-errors",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "cloudformation:dashboard",
+      service: "cloudformation",
+      resourceType: "AWS::CloudWatch::Dashboard",
+      name: "OperationsDashboard",
+      physicalId: "operations",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+  ] as any[];
+
+  const merged = mergeStackFallbackResources(
+    specific,
+    fallbacks,
+  );
+
+  assert.deepEqual(
+    merged.map((resource) => resource.id),
+    [
+      "logs:ap-southeast-2:/aws/lambda/api",
+      "cloudwatch:ap-southeast-2:alarm:api-errors",
+      "cloudformation:dashboard",
+    ],
+  );
+});
