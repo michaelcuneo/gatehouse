@@ -105,6 +105,17 @@ export const load: PageServerLoad = async ({ params }) => {
     scanned: Boolean(discovery),
     scannedAt: discovery?.scannedAt ?? null,
     warnings: discovery?.warnings ?? [],
+    coverage: discovery
+      ? {
+          total: discovery.coverage?.length ?? 0,
+          complete: (discovery.coverage ?? []).filter(
+            (entry) => entry.status === 'complete'
+          ).length,
+          warning: (discovery.coverage ?? []).filter(
+            (entry) => entry.status === 'warning'
+          ).length
+        }
+      : null,
     summary: discovery
       ? summarizeAwsDiscoveryAdoption(
           discovery.resources
