@@ -98,7 +98,13 @@ export interface AwsStageDiscovery {
 
 type StackOwnershipIndexEntry = AwsDiscoveredOwner & {
   resourceType: string;
+  region: string;
 };
+
+type StackOwnershipIndex = Map<
+  string,
+  StackOwnershipIndexEntry[]
+>;
 
 function uniqueRegions(stage: ManagedStage): string[] {
   return [
@@ -128,34 +134,63 @@ export function normalisePhysicalId(value: string): string[] {
   ];
 }
 
+function resourceIsGloballyUnique(
+  resourceType: string,
+): boolean {
+  return [
+    "AWS::S3::Bucket",
+    "AWS::CloudFront::Distribution",
+    "AWS::Route53::HostedZone",
+    "AWS::Route53::RecordSet",
+  ].includes(resourceType);
+}
+
+function samePhysicalResource(
+  left: AwsDiscoveredResource,
+  right: AwsDiscoveredResource,
+): boolean {
+  if (left.resourceType !== right.resourceType) {
+    return false;
+  }
+
+  const physicalMatches = normalisePhysicalId(
+    left.physicalId,
+  ).some((physicalId) =>
+    normalisePhysicalId(right.physicalId).includes(
+      physicalId,
+    ),
+  );
+
+  if (!physicalMatches) {
+    return false;
+  }
+
+  return (
+    resourceIsGloballyUnique(left.resourceType) ||
+    left.region === right.region ||
+    left.region === "global" ||
+    right.region === "global"
+  );
+}
+
 export function mergeStackFallbackResources(
   discovered: AwsDiscoveredResource[],
   stackResources: AwsDiscoveredResource[],
 ): AwsDiscoveredResource[] {
   const merged = [...discovered];
-  const representedPhysicalIds = new Set(
-    discovered.flatMap((resource) =>
-      normalisePhysicalId(resource.physicalId),
-    ),
-  );
 
   for (const resource of stackResources) {
-    const represented = normalisePhysicalId(
-      resource.physicalId,
-    ).some((physicalId) =>
-      representedPhysicalIds.has(physicalId),
+    const represented = merged.some(
+      (candidate) =>
+        candidate.service !== "cloudformation" &&
+        samePhysicalResource(
+          candidate,
+          resource,
+        ),
     );
 
-    if (represented) {
-      continue;
-    }
-
-    merged.push(resource);
-
-    for (const physicalId of normalisePhysicalId(
-      resource.physicalId,
-    )) {
-      representedPhysicalIds.add(physicalId);
+    if (!represented) {
+      merged.push(resource);
     }
   }
 
@@ -196,7 +231,7 @@ async function discoverStacks(
   region: string,
 ): Promise<{
   stacks: AwsDiscoveredStack[];
-  ownership: Map<string, StackOwnershipIndexEntry>;
+  ownership: StackOwnershipIndex;
   resources: AwsDiscoveredResource[];
 }> {
   const cloudFormation = awsClientsForStage(stage, region).cloudFormation;
@@ -224,7 +259,7 @@ async function discoverStacks(
   } while (nextToken);
 
   const stacks: AwsDiscoveredStack[] = [];
-  const ownership = new Map<string, StackOwnershipIndexEntry>();
+  const ownership: StackOwnershipIndex = new Map();
   const resources: AwsDiscoveredResource[] = [];
 
   for (const summary of summaries) {
@@ -270,10 +305,25 @@ async function discoverStacks(
         name: summary.StackName!,
         logicalId: resource.LogicalResourceId,
         resourceType: resource.ResourceType ?? "Unknown",
+        region,
       };
 
       for (const key of normalisePhysicalId(physicalId)) {
-        ownership.set(key, owner);
+        const candidates = ownership.get(key) ?? [];
+
+        if (
+          !candidates.some(
+            (candidate) =>
+              candidate.id === owner.id &&
+              candidate.logicalId === owner.logicalId &&
+              candidate.resourceType === owner.resourceType &&
+              candidate.region === owner.region,
+          )
+        ) {
+          candidates.push(owner);
+        }
+
+        ownership.set(key, candidates);
       }
 
       resources.push({
@@ -304,29 +354,93 @@ async function discoverStacks(
 
 export function ownerFor(
   physicalId: string,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: Map<
+    string,
+    StackOwnershipIndexEntry | StackOwnershipIndexEntry[]
+  >,
+  resource?: Pick<
+    AwsDiscoveredResource,
+    "resourceType" | "region"
+  >,
 ): AwsDiscoveredOwner | undefined {
-  for (const key of normalisePhysicalId(physicalId)) {
-    const owner = ownership.get(key);
+  const candidates = new Map<
+    string,
+    StackOwnershipIndexEntry
+  >();
 
-    if (owner) {
-      return {
-        type: owner.type,
-        id: owner.id,
-        name: owner.name,
-        logicalId: owner.logicalId,
-      };
+  for (const key of normalisePhysicalId(physicalId)) {
+    const value = ownership.get(key);
+
+    if (!value) {
+      continue;
+    }
+
+    for (const owner of Array.isArray(value)
+      ? value
+      : [value]) {
+      candidates.set(
+        [
+          owner.id,
+          owner.logicalId ?? "",
+          owner.resourceType,
+          owner.region,
+        ].join("\0"),
+        owner,
+      );
     }
   }
 
-  return undefined;
+  let matches = [...candidates.values()];
+
+  if (resource?.resourceType) {
+    const typed = matches.filter(
+      (owner) =>
+        owner.resourceType === resource.resourceType,
+    );
+
+    if (typed.length) {
+      matches = typed;
+    }
+  }
+
+  if (
+    resource?.region &&
+    resource.region !== "global"
+  ) {
+    const regional = matches.filter(
+      (owner) => owner.region === resource.region,
+    );
+
+    if (regional.length) {
+      matches = regional;
+    } else if (matches.length > 1) {
+      return undefined;
+    }
+  }
+
+  if (matches.length !== 1) {
+    return undefined;
+  }
+
+  const owner = matches[0];
+
+  return {
+    type: owner.type,
+    id: owner.id,
+    name: owner.name,
+    logicalId: owner.logicalId,
+  };
 }
 
 export function discovered(
   input: Omit<AwsDiscoveredResource, "ownership" | "owner">,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): AwsDiscoveredResource {
-  const owner = ownerFor(input.physicalId, ownership);
+  const owner = ownerFor(
+    input.physicalId,
+    ownership,
+    input,
+  );
 
   return {
     ...input,
@@ -337,7 +451,7 @@ export function discovered(
 
 async function discoverS3(
   stage: ManagedStage,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const { s3 } = awsClientsForStage(stage);
   const result = await s3.send(new ListBucketsCommand({}));
@@ -439,7 +553,7 @@ async function discoverS3(
 
 async function discoverRoute53(
   stage: ManagedStage,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const { route53 } = awsClientsForStage(stage);
   const resources: AwsDiscoveredResource[] = [];
@@ -554,7 +668,7 @@ async function discoverRoute53(
 async function discoverAcm(
   stage: ManagedStage,
   region: string,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const { acm } = awsClientsForStage(stage, region);
   const resources: AwsDiscoveredResource[] = [];
@@ -619,7 +733,7 @@ async function discoverAcm(
 
 async function discoverCloudFront(
   stage: ManagedStage,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const { cloudFront } = awsClientsForStage(stage);
   const resources: AwsDiscoveredResource[] = [];
@@ -697,7 +811,7 @@ async function discoverCloudFront(
 async function discoverLambda(
   stage: ManagedStage,
   region: string,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const { lambda } = awsClientsForStage(stage, region);
   const resources: AwsDiscoveredResource[] = [];
@@ -752,7 +866,7 @@ async function discoverLambda(
 async function discoverDynamoDb(
   stage: ManagedStage,
   region: string,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const { dynamoDB } = awsClientsForStage(stage, region);
   const resources: AwsDiscoveredResource[] = [];
@@ -832,7 +946,7 @@ async function discoverDynamoDb(
 async function discoverLogGroups(
   stage: ManagedStage,
   region: string,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const logs = awsClientsForStage(stage, region).logs;
   const resources: AwsDiscoveredResource[] = [];
@@ -884,7 +998,7 @@ async function discoverLogGroups(
 async function discoverCloudWatchAlarms(
   stage: ManagedStage,
   region: string,
-  ownership: Map<string, StackOwnershipIndexEntry>,
+  ownership: StackOwnershipIndex,
 ): Promise<AwsDiscoveredResource[]> {
   const cloudWatch = awsClientsForStage(stage, region).cloudWatch;
   const resources: AwsDiscoveredResource[] = [];
@@ -973,7 +1087,7 @@ export async function discoverAwsStage(
   const warnings: string[] = [];
   const coverage: AwsDiscoveryCoverageEntry[] = [];
   const stacks: AwsDiscoveredStack[] = [];
-  const ownership = new Map<string, StackOwnershipIndexEntry>();
+  const ownership: StackOwnershipIndex = new Map();
   const stackResources: AwsDiscoveredResource[] = [];
 
   for (const region of regions) {
@@ -989,8 +1103,31 @@ export async function discoverAwsStage(
         discovered: discoveredStacks.resources.length,
       });
 
-      for (const [physicalId, owner] of discoveredStacks.ownership) {
-        ownership.set(physicalId, owner);
+      for (const [
+        physicalId,
+        owners,
+      ] of discoveredStacks.ownership) {
+        const existing =
+          ownership.get(physicalId) ?? [];
+
+        for (const owner of owners) {
+          if (
+            !existing.some(
+              (candidate) =>
+                candidate.id === owner.id &&
+                candidate.logicalId === owner.logicalId &&
+                candidate.resourceType === owner.resourceType &&
+                candidate.region === owner.region,
+            )
+          ) {
+            existing.push(owner);
+          }
+        }
+
+        ownership.set(
+          physicalId,
+          existing,
+        );
       }
     } catch (cause) {
       const message =
