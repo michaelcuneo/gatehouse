@@ -102,6 +102,68 @@
         </article>
       </div>
 
+      <article class="panel">
+        <span class="eyebrow">Dogfood safety</span>
+        <h2>Live AWS readiness</h2>
+
+        <div class="metric-grid dashboard-metrics">
+          <article class="metric">
+            <strong>{data.aws.ok ? 'Verified' : 'Blocked'}</strong>
+            <span class="muted">AWS identity</span>
+          </article>
+
+          <article class="metric">
+            <strong>{data.dogfood.readOnly ? 'Locked' : 'Unlocked'}</strong>
+            <span class="muted">AWS mutation mode</span>
+          </article>
+
+          <article class="metric">
+            <strong>{data.dogfood.scanned ? 'Captured' : 'Not scanned'}</strong>
+            <span class="muted">Discovery snapshot</span>
+          </article>
+
+          <article class="metric">
+            <strong>{data.dogfood.warnings.length}</strong>
+            <span class="muted">Discovery warnings</span>
+          </article>
+
+          {#if data.dogfood.summary}
+            <article class="metric">
+              <strong>{data.dogfood.summary.importable}</strong>
+              <span class="muted">Importable shapes</span>
+            </article>
+
+            <article class="metric">
+              <strong>{data.dogfood.summary.inventoryOnly}</strong>
+              <span class="muted">Inventory-only shapes</span>
+            </article>
+          {/if}
+        </div>
+
+        {#if data.dogfood.readOnly}
+          <p class="muted">
+            Safe dogfood mode is active. Refresh Discovery and export the estate report before enabling AWS adoption.
+          </p>
+        {:else}
+          <p class="error">
+            AWS adoption is enabled for this stage. GateHouse ownership and migration actions are available.
+          </p>
+        {/if}
+
+        {#if data.dogfood.scannedAt}
+          <p class="muted mono">
+            Last discovery snapshot {new Date(data.dogfood.scannedAt).toLocaleString()}
+          </p>
+        {/if}
+
+        <div class="stage-row">
+          <a class="pill" href={base + '/discovery'}>Open Discovery</a>
+          {#if data.dogfood.scanned}
+            <a class="pill" href={base + '/discovery/report'}>Export dogfood report</a>
+          {/if}
+        </div>
+      </article>
+
       {#if !data.aws.ok}
         <article class="panel">
           <span class="eyebrow">AWS connection</span>
