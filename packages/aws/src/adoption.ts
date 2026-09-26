@@ -616,6 +616,7 @@ export function buildAwsDiscoveryDogfoodReport(input: {
     | "primaryRegion"
     | "additionalRegions"
     | "adoptionMode"
+    | "enabled"
   >;
   discovery: import("./discovery").AwsStageDiscovery;
   exportedAt?: string;
@@ -680,6 +681,7 @@ export function buildAwsDiscoveryDogfoodReport(input: {
 
 export interface AwsDogfoodReadinessCheck {
   id:
+    | "stage_enabled"
     | "read_only_lock"
     | "account_match"
     | "region_coverage"
@@ -755,6 +757,7 @@ export function evaluateAwsDogfoodReadiness(
     | "primaryRegion"
     | "additionalRegions"
     | "adoptionMode"
+    | "enabled"
   >,
   discovery: import("./discovery").AwsStageDiscovery | null,
   options: {
@@ -769,6 +772,7 @@ export function evaluateAwsDogfoodReadiness(
     ].filter(Boolean)),
   ];
 
+  const stageEnabled = stage.enabled !== false;
   const readOnly = !awsStageAdoptionEnabled(stage);
   const accountMatches = Boolean(
     discovery && discovery.accountId === stage.accountId,
@@ -817,6 +821,13 @@ export function evaluateAwsDogfoodReadiness(
     Boolean(discovery) && snapshotAgeMs <= maxSnapshotAgeMs;
 
   const checks: AwsDogfoodReadinessCheck[] = [
+    {
+      id: "stage_enabled",
+      ok: stageEnabled,
+      message: stageEnabled
+        ? "Stage is enabled."
+        : "Stage is disabled; adoption and migration actions are blocked.",
+    },
     {
       id: "read_only_lock",
       ok: readOnly,
