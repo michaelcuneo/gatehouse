@@ -3,6 +3,7 @@ import {
   updateResourceState,
   writeAuditLog,
 } from "@gatehouse/db";
+import { resourceOwnership } from "@gatehouse/providers";
 import { listResources } from "@gatehouse/resources";
 import type { Resource } from "@gatehouse/types";
 
@@ -83,6 +84,10 @@ export function resourceIsDue(
     >
   >,
 ): boolean {
+  if (resourceOwnership(resource) !== "gatehouse") {
+    return false;
+  }
+
   if (resource.status === "reconciling") {
     return reconciliationIsStale(
       resource,
