@@ -109,6 +109,24 @@ export function initDatabase() {
         ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS aws_stack_migrations (
+      stage_id TEXT NOT NULL,
+      stack_id TEXT NOT NULL,
+      stack_name TEXT NOT NULL,
+      owner_type TEXT NOT NULL,
+      region TEXT NOT NULL,
+      status TEXT NOT NULL,
+      prepared_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(stage_id, stack_id),
+      FOREIGN KEY(stage_id)
+        REFERENCES managed_project_stages(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_aws_stack_migrations_stage
+      ON aws_stack_migrations(stage_id, updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS deployments (
       id TEXT PRIMARY KEY,
       resource_id TEXT NOT NULL,
