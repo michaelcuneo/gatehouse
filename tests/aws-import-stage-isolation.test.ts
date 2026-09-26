@@ -123,6 +123,27 @@ test("AWS imports with the same discovery id stay isolated by stage", async () =
       "resource-b",
     );
 
+    assert.deepEqual(
+      resources
+        .listImportedAwsResourcesForStage("stage-a")
+        .map((resource) => resource.id),
+      ["resource-a"],
+    );
+
+    assert.deepEqual(
+      resources
+        .listImportedAwsResourcesForStage("stage-b")
+        .map((resource) => resource.id),
+      ["resource-b"],
+    );
+
+    assert.deepEqual(
+      resources.listImportedAwsResourcesForStage(
+        "missing-stage",
+      ),
+      [],
+    );
+
     assert.equal(
       resources.findImportedAwsResource(
         "missing-stage",
