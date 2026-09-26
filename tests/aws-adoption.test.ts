@@ -580,3 +580,46 @@ test("adoption gap summary groups identical unsupported resource shapes", () => 
   assert.equal(gaps[1]?.resourceType, "AWS::SNS::Topic");
   assert.equal(gaps[1]?.count, 1);
 });
+
+
+test("CloudWatch logs and alarms remain visible but inventory-only", () => {
+  const logGroup = {
+    id: "logs:ap-southeast-2:/aws/lambda/api",
+    service: "logs",
+    resourceType: "AWS::Logs::LogGroup",
+    name: "/aws/lambda/api",
+    physicalId: "/aws/lambda/api",
+    region: "ap-southeast-2",
+    ownership: "observed",
+    details: {
+      retentionInDays: 14,
+    },
+  } as any;
+
+  const alarm = {
+    id: "cloudwatch:ap-southeast-2:alarm:errors",
+    service: "cloudwatch",
+    resourceType: "AWS::CloudWatch::Alarm",
+    name: "errors",
+    physicalId: "errors",
+    region: "ap-southeast-2",
+    ownership: "observed",
+    details: {
+      stateValue: "OK",
+    },
+  } as any;
+
+  for (const resource of [logGroup, alarm]) {
+    const assessment = assessAwsDiscoveryResource(
+      resource,
+      [logGroup, alarm],
+    );
+
+    assert.equal(assessment.state, "inventory_only");
+    assert.equal(assessment.importable, false);
+    assert.match(
+      assessment.reason ?? "",
+      /does not have a safe adoption model/i,
+    );
+  }
+});
