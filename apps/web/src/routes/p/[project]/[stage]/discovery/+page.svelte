@@ -165,6 +165,14 @@
 
   const stackMigrationFor = (stackId: string) =>
     data.stackMigrations[stackId] ?? null;
+
+  const migrationBlockers = $derived(
+    form &&
+    'blockers' in form &&
+    Array.isArray(form.blockers)
+      ? form.blockers
+      : []
+  );
 </script>
 
 <main class="container">
@@ -238,11 +246,11 @@
     </p>
   {/if}
 
-  {#if form?.action === 'verifyMigration' && form?.blockers?.length}
+  {#if form?.action === 'verifyMigration' && migrationBlockers.length}
     <section class="panel">
       <span class="eyebrow">Migration blockers</span>
       <h2>Stack is not ready to detach</h2>
-      {#each form.blockers as blocker}
+      {#each migrationBlockers as blocker}
         <p class="error mono">{blocker}</p>
       {/each}
     </section>
