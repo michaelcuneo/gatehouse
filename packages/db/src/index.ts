@@ -7,3 +7,4 @@ export * from "./audit";
 export * from "./deployments";
 export * from "./awsDiscovery";
 export * from "./awsStackMigrations";
+export * from "./stateExport";
