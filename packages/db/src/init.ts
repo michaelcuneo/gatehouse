@@ -4,6 +4,19 @@ type TableInfoRow = {
   name: string;
 };
 
+function ensureManagedStageColumns(): void {
+  const sqlite = getDatabase();
+  const columns = sqlite
+    .prepare("PRAGMA table_info(managed_project_stages)")
+    .all() as TableInfoRow[];
+
+  if (!columns.some((column) => column.name === "adoption_mode")) {
+    sqlite.exec(
+      "ALTER TABLE managed_project_stages ADD COLUMN adoption_mode TEXT NOT NULL DEFAULT 'read_only'",
+    );
+  }
+}
+
 function ensureDeploymentColumns(): void {
   const sqlite = getDatabase();
   const columns = sqlite
@@ -59,6 +72,7 @@ export function initDatabase() {
       capabilities TEXT NOT NULL,
       selectors TEXT,
       manifest TEXT,
+      adoption_mode TEXT NOT NULL DEFAULT 'read_only',
       enabled INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY(project_id)
         REFERENCES managed_projects(id)
@@ -148,5 +162,6 @@ export function initDatabase() {
       ON deployments(started_at DESC);
   `);
 
+  ensureManagedStageColumns();
   ensureDeploymentColumns();
 }
