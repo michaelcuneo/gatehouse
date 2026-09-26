@@ -568,7 +568,7 @@ export function awsStageAdoptionEnabled(
 
 export interface AwsDiscoveryDogfoodReport {
   format: "gatehouse-aws-discovery-report";
-  version: 1;
+  version: 2;
   exportedAt: string;
   project: {
     id: string;
@@ -590,6 +590,8 @@ export interface AwsDiscoveryDogfoodReport {
     warnings: string[];
     stacks: import("./discovery").AwsDiscoveredStack[];
     summary: ReturnType<typeof summarizeAwsDiscoveryAdoption>;
+    dogfoodReadiness: AwsDogfoodReadiness;
+    adoptionSafety: AwsDogfoodReadiness;
     gaps: AwsDiscoveryAdoptionGap[];
     resources: Array<
       import("./discovery").AwsDiscoveredResource & {
@@ -618,11 +620,19 @@ export function buildAwsDiscoveryDogfoodReport(input: {
   exportedAt?: string;
 }): AwsDiscoveryDogfoodReport {
   const { discovery } = input;
+  const exportedAt =
+    input.exportedAt ?? new Date().toISOString();
+  const readinessNow = Date.parse(exportedAt);
+  const readinessOptions = {
+    now: Number.isFinite(readinessNow)
+      ? readinessNow
+      : Date.now(),
+  };
 
   return {
     format: "gatehouse-aws-discovery-report",
-    version: 1,
-    exportedAt: input.exportedAt ?? new Date().toISOString(),
+    version: 2,
+    exportedAt,
     project: {
       id: input.project.id,
       name: input.project.name,
@@ -643,6 +653,16 @@ export function buildAwsDiscoveryDogfoodReport(input: {
       warnings: discovery.warnings,
       stacks: discovery.stacks,
       summary: summarizeAwsDiscoveryAdoption(discovery.resources),
+      dogfoodReadiness: evaluateAwsDogfoodReadiness(
+        input.stage,
+        discovery,
+        readinessOptions,
+      ),
+      adoptionSafety: evaluateAwsAdoptionUnlockReadiness(
+        input.stage,
+        discovery,
+        readinessOptions,
+      ),
       gaps: summarizeAwsDiscoveryAdoptionGaps(discovery.resources),
       resources: discovery.resources.map((resource) => ({
         ...resource,
