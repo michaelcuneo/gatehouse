@@ -152,6 +152,19 @@
     form?.action === 'dryRun' &&
     form?.resourceId === resourceId &&
     form?.safeToAdopt === true;
+
+  const childrenForStack = (stackId: string) =>
+    data.discovery.resources.filter(
+      (resource) => resource.owner?.id === stackId
+    );
+
+  const importedChildrenForStack = (stackId: string) =>
+    childrenForStack(stackId).filter(
+      (resource) => Boolean(importedFor(resource))
+    ).length;
+
+  const stackMigrationFor = (stackId: string) =>
+    data.stackMigrations[stackId] ?? null;
 </script>
 
 <main class="container">
@@ -194,6 +207,14 @@
   {:else if form?.action === 'takeControl' && form?.success}
     <p class="muted mono">
       GateHouse ownership enabled and reconciliation verified.
+    </p>
+  {:else if form?.action === 'prepareMigration' && form?.success}
+    <p class="muted mono">
+      Stack migration prepared locally. AWS ownership is unchanged.
+    </p>
+  {:else if form?.action === 'cancelMigration' && form?.success}
+    <p class="muted mono">
+      Stack migration plan removed. AWS ownership is unchanged.
     </p>
   {/if}
 
@@ -250,16 +271,49 @@
             <th>Region</th>
             <th>Status</th>
             <th>Resources</th>
+            <th>Migration</th>
           </tr>
         </thead>
         <tbody>
           {#each data.discovery.stacks as stack}
+            {@const migration = stackMigrationFor(stack.id)}
+            {@const childCount = childrenForStack(stack.id).length}
+            {@const importedCount = importedChildrenForStack(stack.id)}
             <tr>
-              <td><strong>{stack.name}</strong></td>
+              <td>
+                <strong>{stack.name}</strong>
+                <div class="muted mono">{stack.id}</div>
+              </td>
               <td>{stack.ownerType}</td>
               <td>{stack.region}</td>
               <td class="mono">{stack.status}</td>
-              <td>{stack.resourceCount}</td>
+              <td>
+                {childCount} discovered
+                {#if importedCount}
+                  <div class="muted">{importedCount} imported locally</div>
+                {/if}
+              </td>
+              <td>
+                {#if migration}
+                  <span class="status status-pending">prepared</span>
+                  <div class="muted">
+                    AWS remains {stack.ownerType}-owned
+                  </div>
+                  <form method="POST" action="?/cancelMigration">
+                    <input type="hidden" name="stackId" value={stack.id} />
+                    <button class="pill" type="submit">
+                      Cancel plan
+                    </button>
+                  </form>
+                {:else}
+                  <form method="POST" action="?/prepareMigration">
+                    <input type="hidden" name="stackId" value={stack.id} />
+                    <button class="pill" type="submit">
+                      Prepare migration
+                    </button>
+                  </form>
+                {/if}
+              </td>
             </tr>
           {/each}
         </tbody>
