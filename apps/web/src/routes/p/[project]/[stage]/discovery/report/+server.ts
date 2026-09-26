@@ -9,6 +9,9 @@ import {
   getAwsDiscoverySnapshot,
   getManagedStage
 } from '@gatehouse/db';
+import {
+  listImportedAwsResourcesForStage
+} from '@gatehouse/resources';
 
 export const GET: RequestHandler = async ({ params }) => {
   const context = getManagedStage(
@@ -33,10 +36,29 @@ export const GET: RequestHandler = async ({ params }) => {
   }
 
   const discovery = snapshot.payload;
+  const localImports = Object.fromEntries(
+    listImportedAwsResourcesForStage(
+      context.stage.id
+    ).map((resource) => [
+      resource.metadata!.importedFrom!.discoveryId,
+      {
+        id: resource.id,
+        kind: resource.kind,
+        ownership:
+          resource.metadata?.ownership?.mode ??
+          (resource.metadata?.managed === false
+            ? 'external'
+            : 'gatehouse'),
+        healthy: resource.runtime?.healthy ?? null,
+        status: resource.status
+      }
+    ])
+  );
   const report = buildAwsDiscoveryDogfoodReport({
     project: context.project,
     stage: context.stage,
-    discovery
+    discovery,
+    localImports
   });
 
   const timestamp = discovery.scannedAt
