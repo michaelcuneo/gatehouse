@@ -269,6 +269,17 @@ export function assessAwsDiscoveryResource(
   resource: AwsDiscoveredResource,
   resources: AwsDiscoveredResource[],
 ): AwsDiscoveryAdoptionAssessment {
+  if (
+    resource.details?.ownershipAmbiguous === true
+  ) {
+    return {
+      state: "inventory_only",
+      importable: false,
+      reason:
+        "CloudFormation ownership is ambiguous for this physical resource. GateHouse will not import or adopt it until ownership resolves to exactly one matching stack resource.",
+    };
+  }
+
   try {
     if (
       resource.service === "s3" &&
