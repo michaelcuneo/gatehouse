@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   assertAwsStageAccess,
+  evaluateAwsDogfoodReadiness,
   summarizeAwsDiscoveryAdoption,
   type AwsStageDiscovery
 } from '@gatehouse/aws';
@@ -57,6 +58,11 @@ export const load: PageServerLoad = async ({ params }) => {
       context.stage.id
     );
   const discovery = discoverySnapshot?.payload ?? null;
+  const dogfoodReadiness =
+    evaluateAwsDogfoodReadiness(
+      context.stage,
+      discovery
+    );
   const dogfood = {
     readOnly:
       (context.stage.adoptionMode ?? 'read_only') !==
@@ -68,7 +74,8 @@ export const load: PageServerLoad = async ({ params }) => {
       ? summarizeAwsDiscoveryAdoption(
           discovery.resources
         )
-      : null
+      : null,
+    readiness: dogfoodReadiness
   };
 
   try {
