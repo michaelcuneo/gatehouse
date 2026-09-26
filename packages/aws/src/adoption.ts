@@ -358,6 +358,30 @@ export function assessAwsDiscoveryResource(
     }
 
     if (
+      resource.service === "logs" &&
+      resource.resourceType === "AWS::Logs::LogGroup"
+    ) {
+      return {
+        state: "inventory_only",
+        importable: false,
+        reason:
+          "CloudWatch log groups are discovery-only until GateHouse has a first-class log-group resource and retention/lifecycle provider.",
+      };
+    }
+
+    if (
+      resource.service === "cloudwatch" &&
+      resource.resourceType === "AWS::CloudWatch::Alarm"
+    ) {
+      return {
+        state: "inventory_only",
+        importable: false,
+        reason:
+          "CloudWatch alarms are discovery-only until GateHouse can represent alarm metrics, dimensions, actions and evaluation settings exactly.",
+      };
+    }
+
+    if (
       resource.service === "route53" &&
       resource.resourceType === "AWS::Route53::RecordSet"
     ) {
