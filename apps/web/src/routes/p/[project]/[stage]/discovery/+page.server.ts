@@ -3,10 +3,12 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
   applyCloudFormationRetention,
+  assessAwsDiscoveryResource,
   assertImportableCloudFront,
   assertImportableDynamoDB,
   assertImportableS3,
   cloudFormationStackExists,
+  summarizeAwsDiscoveryAdoption,
   detachCloudFormationStack,
   discoverAwsStage,
   verifyCloudFormationRetention,
@@ -677,11 +679,24 @@ export const load: PageServerLoad = async ({ params }) => {
     ])
   );
 
+  const adoption = Object.fromEntries(
+    discovery.resources.map((resource) => [
+      resource.id,
+      assessAwsDiscoveryResource(
+        resource,
+        discovery.resources
+      )
+    ])
+  );
+
   return {
     ...context,
     discovery,
     imported,
-    stackMigrations
+    stackMigrations,
+    adoption,
+    adoptionSummary:
+      summarizeAwsDiscoveryAdoption(discovery.resources)
   };
 };
 
