@@ -1,6 +1,12 @@
 import { getDatabase } from "./client";
 
-export type AuditAction = "create" | "update" | "delete" | "reconcile";
+export type AuditAction =
+  | "create"
+  | "update"
+  | "delete"
+  | "reconcile"
+  | "relinquish"
+  | "destroy";
 
 export interface StoredAuditLog {
   id: string;
