@@ -140,6 +140,40 @@
           {/if}
         </div>
 
+        <p class={data.dogfood.readiness.ready && data.aws.ok ? 'muted' : 'error'}>
+          {data.dogfood.readiness.ready && data.aws.ok
+            ? 'Read-only AWS dogfood preflight passed.'
+            : 'Read-only AWS dogfood preflight has blockers.'}
+        </p>
+
+        <div class="resource-list">
+          {#each data.dogfood.readiness.checks as check}
+            <div class="resource-row">
+              <div>
+                <strong>{check.id.replaceAll('_', ' ')}</strong>
+                <span class="muted">{check.message}</span>
+              </div>
+              <span class={check.ok ? 'status status-ready' : 'status status-error'}>
+                {check.ok ? 'pass' : 'blocked'}
+              </span>
+            </div>
+          {/each}
+
+          <div class="resource-row">
+            <div>
+              <strong>AWS identity access</strong>
+              <span class="muted">
+                {data.aws.ok
+                  ? 'Runtime AWS identity verified for this stage.'
+                  : 'Runtime AWS identity verification failed.'}
+              </span>
+            </div>
+            <span class={data.aws.ok ? 'status status-ready' : 'status status-error'}>
+              {data.aws.ok ? 'pass' : 'blocked'}
+            </span>
+          </div>
+        </div>
+
         {#if data.dogfood.readOnly}
           <p class="muted">
             Safe dogfood mode is active. Refresh Discovery and export the estate report before enabling AWS adoption.
