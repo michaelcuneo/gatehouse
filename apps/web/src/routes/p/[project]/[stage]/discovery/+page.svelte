@@ -96,6 +96,7 @@
         Back to stage
       </a>
     </div>
+  </div>
 
   <section class="panel">
     <span class="eyebrow">Adoption coverage</span>
@@ -127,9 +128,6 @@
       </article>
     </div>
   </section>
-
-
-  </div>
 
   <p class="muted mono">
     Last scanned {new Date(data.discovery.scannedAt).toLocaleString()}
