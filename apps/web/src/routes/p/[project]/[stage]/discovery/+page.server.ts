@@ -10,6 +10,7 @@ import {
   assertImportableS3,
   cloudFormationStackExists,
   summarizeAwsDiscoveryAdoption,
+  summarizeAwsDiscoveryAdoptionGaps,
   detachCloudFormationStack,
   discoverAwsStage,
   verifyCloudFormationRetention,
@@ -710,7 +711,11 @@ export const load: PageServerLoad = async ({ params }) => {
     stackMigrations,
     adoption,
     adoptionSummary:
-      summarizeAwsDiscoveryAdoption(discovery.resources)
+      summarizeAwsDiscoveryAdoption(discovery.resources),
+    adoptionGaps:
+      summarizeAwsDiscoveryAdoptionGaps(
+        discovery.resources
+      )
   };
 };
 
