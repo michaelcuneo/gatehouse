@@ -582,6 +582,7 @@ export interface AwsDiscoveryDogfoodReport {
     primaryRegion: string;
     additionalRegions: string[];
     adoptionMode: "read_only" | "enabled";
+    enabled: boolean;
   };
   discovery: {
     accountId: string;
@@ -647,6 +648,7 @@ export function buildAwsDiscoveryDogfoodReport(input: {
       primaryRegion: input.stage.primaryRegion,
       additionalRegions: input.stage.additionalRegions ?? [],
       adoptionMode: input.stage.adoptionMode ?? "read_only",
+      enabled: input.stage.enabled !== false,
     },
     discovery: {
       accountId: discovery.accountId,
@@ -909,6 +911,7 @@ export function evaluateAwsAdoptionUnlockReadiness(
     | "primaryRegion"
     | "additionalRegions"
     | "adoptionMode"
+    | "enabled"
   >,
   discovery: import("./discovery").AwsStageDiscovery | null,
   options: {
