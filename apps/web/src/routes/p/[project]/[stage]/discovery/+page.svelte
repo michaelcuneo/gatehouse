@@ -13,6 +13,14 @@
     (data.stage.adoptionMode ?? 'read_only') !== 'enabled'
   );
 
+  const adoptionSafetyBlocked = $derived(
+    !adoptionMutationBlocked && !data.adoptionSafety.ready
+  );
+
+  const adoptionMutationBlocked = $derived(
+    adoptionLocked || adoptionSafetyBlocked
+  );
+
   const supportsImport = (
     resource: (typeof data.discovery.resources)[number]
   ) => data.adoption[resource.id]?.importable === true;
@@ -109,7 +117,7 @@
     </div>
   </div>
 
-  {#if adoptionLocked}
+  {#if adoptionMutationBlocked}
     <section class="panel">
       <span class="eyebrow">Read-only dogfood mode</span>
       <h2>AWS mutation lock active</h2>
@@ -118,6 +126,23 @@
         Imports, ownership changes, stack-migration progression and AWS adoption mutations are blocked
         until this stage is explicitly unlocked in Stage settings.
       </p>
+    </section>
+  {/if}
+
+  {#if adoptionSafetyBlocked}
+    <section class="panel">
+      <span class="eyebrow">AWS adoption safety</span>
+      <h2>Mutation baseline needs refresh</h2>
+      <p class="error">
+        AWS adoption is enabled, but GateHouse will not import, advance migration,
+        detach stacks or take ownership until the discovery safety baseline passes again.
+      </p>
+      {#each data.adoptionSafety.blockers as blocker}
+        <p class="muted mono">{blocker}</p>
+      {/each}
+      <form method="POST" action="?/refresh">
+        <button class="button" type="submit">Refresh inventory</button>
+      </form>
     </section>
   {/if}
 
@@ -330,8 +355,8 @@
                   </div>
 
                   {#if migration.status === 'prepared'}
-                    {#if adoptionLocked}
-                      <p class="muted">Read-only mode blocks migration progression.</p>
+                    {#if adoptionMutationBlocked}
+                      <p class="muted">AWS mutation safety gate blocks migration progression.</p>
                     {:else}
                     <form method="POST" action="?/verifyMigration">
                       <input type="hidden" name="stackId" value={stack.id} />
@@ -341,8 +366,8 @@
                     </form>
                     {/if}
                   {:else if migration.status === 'ready_for_detach'}
-                    {#if adoptionLocked}
-                      <p class="muted">Read-only mode blocks retention changes.</p>
+                    {#if adoptionMutationBlocked}
+                      <p class="muted">AWS mutation safety gate blocks retention changes.</p>
                     {:else if stack.ownerType === 'cloudformation'}
                       <form method="POST" action="?/applyRetention">
                         <input type="hidden" name="stackId" value={stack.id} />
@@ -366,8 +391,8 @@
                     <p class="muted">
                       Every stack resource is configured to be retained.
                     </p>
-                    {#if adoptionLocked}
-                      <p class="muted">Read-only mode blocks stack detach initiation.</p>
+                    {#if adoptionMutationBlocked}
+                      <p class="muted">AWS mutation safety gate blocks stack detach initiation.</p>
                     {:else}
                       <p class="muted">Type the exact stack name to initiate CloudFormation detach.</p>
                     <form method="POST" action="?/detachStack">
@@ -409,8 +434,8 @@
                     </form>
                   {/if}
                 {:else}
-                  {#if adoptionLocked}
-                    <span class="muted">Read-only mode</span>
+                  {#if adoptionMutationBlocked}
+                    <span class="muted">AWS safety gate</span>
                   {:else}
                   <form method="POST" action="?/prepareMigration">
                     <input type="hidden" name="stackId" value={stack.id} />
@@ -509,8 +534,8 @@
               <td>
                 {#if !imported}
                   {#if supportsImport(resource)}
-                    {#if adoptionLocked}
-                      <span class="muted">Import blocked by read-only mode</span>
+                    {#if adoptionMutationBlocked}
+                      <span class="muted">Import blocked by AWS safety gate</span>
                     {:else}
                     <form method="POST" action="?/import">
                       <input type="hidden" name="discoveryId" value={resource.id} />
@@ -537,7 +562,7 @@
                       </button>
                     </form>
 
-                    {#if dryRunPassedFor(imported.id) && !adoptionLocked}
+                    {#if dryRunPassedFor(imported.id) && !adoptionMutationBlocked}
                       <form method="POST" action="?/takeControl">
                         <input type="hidden" name="resourceId" value={imported.id} />
                         <button class="button" type="submit">
