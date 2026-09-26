@@ -2,8 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 import {
-  assessAwsDiscoveryResource,
-  summarizeAwsDiscoveryAdoption,
+  buildAwsDiscoveryDogfoodReport,
   type AwsStageDiscovery
 } from '@gatehouse/aws';
 import {
@@ -34,43 +33,11 @@ export const GET: RequestHandler = async ({ params }) => {
   }
 
   const discovery = snapshot.payload;
-  const summary =
-    summarizeAwsDiscoveryAdoption(discovery.resources);
-  const resources = discovery.resources.map((resource) => ({
-    ...resource,
-    adoption: assessAwsDiscoveryResource(
-      resource,
-      discovery.resources
-    )
-  }));
-
-  const report = {
-    format: 'gatehouse-aws-discovery-report',
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    project: {
-      id: context.project.id,
-      name: context.project.name,
-      slug: context.project.slug
-    },
-    stage: {
-      id: context.stage.id,
-      name: context.stage.name,
-      accountId: context.stage.accountId,
-      primaryRegion: context.stage.primaryRegion,
-      additionalRegions:
-        context.stage.additionalRegions ?? []
-    },
-    discovery: {
-      accountId: discovery.accountId,
-      scannedAt: discovery.scannedAt,
-      regions: discovery.regions,
-      warnings: discovery.warnings,
-      stacks: discovery.stacks,
-      summary,
-      resources
-    }
-  };
+  const report = buildAwsDiscoveryDogfoodReport({
+    project: context.project,
+    stage: context.stage,
+    discovery
+  });
 
   const timestamp = discovery.scannedAt
     .replace(/[:.]/g, '-')
