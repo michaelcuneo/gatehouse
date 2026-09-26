@@ -13,12 +13,12 @@
     (data.stage.adoptionMode ?? 'read_only') !== 'enabled'
   );
 
-  const adoptionSafetyBlocked = $derived(
-    !adoptionLocked && !data.adoptionSafety.ready
+  const adoptionBaselineBlocked = $derived(
+    !data.adoptionSafety.ready
   );
 
   const adoptionMutationBlocked = $derived(
-    adoptionLocked || adoptionSafetyBlocked
+    adoptionLocked || adoptionBaselineBlocked
   );
 
   const supportsImport = (
@@ -122,20 +122,20 @@
       <span class="eyebrow">Read-only dogfood mode</span>
       <h2>AWS mutation lock active</h2>
       <p class="muted">
-        Discovery, reports, health comparison and safe verification remain available.
-        Imports, ownership changes, stack-migration progression and AWS adoption mutations are blocked
-        until this stage is explicitly unlocked in Stage settings.
+        Discovery, reports, local read-only imports, dry runs and migration planning remain available
+        when the discovery safety baseline passes. AWS mutations and GateHouse ownership takeover remain
+        blocked until this stage is explicitly unlocked in Stage settings.
       </p>
     </section>
   {/if}
 
-  {#if adoptionSafetyBlocked}
+  {#if adoptionBaselineBlocked}
     <section class="panel">
-      <span class="eyebrow">AWS adoption safety</span>
-      <h2>Mutation baseline needs refresh</h2>
+      <span class="eyebrow">AWS discovery safety</span>
+      <h2>Discovery baseline needs refresh</h2>
       <p class="error">
-        AWS adoption is enabled, but GateHouse will not import, advance migration,
-        detach stacks or take ownership until the discovery safety baseline passes again.
+        GateHouse will not import resources, advance migration planning, mutate AWS,
+        or take ownership until the discovery safety baseline passes again.
       </p>
       {#each data.adoptionSafety.blockers as blocker}
         <p class="muted mono">{blocker}</p>
@@ -399,8 +399,8 @@
                   </div>
 
                   {#if migration.status === 'prepared'}
-                    {#if adoptionMutationBlocked}
-                      <p class="muted">AWS mutation safety gate blocks migration progression.</p>
+                    {#if adoptionBaselineBlocked}
+                      <p class="muted">Discovery safety gate blocks migration verification.</p>
                     {:else}
                     <form method="POST" action="?/verifyMigration">
                       <input type="hidden" name="stackId" value={stack.id} />
@@ -478,8 +478,8 @@
                     </form>
                   {/if}
                 {:else}
-                  {#if adoptionMutationBlocked}
-                    <span class="muted">AWS safety gate</span>
+                  {#if adoptionBaselineBlocked}
+                    <span class="muted">Discovery safety gate</span>
                   {:else}
                   <form method="POST" action="?/prepareMigration">
                     <input type="hidden" name="stackId" value={stack.id} />
@@ -578,8 +578,8 @@
               <td>
                 {#if !imported}
                   {#if supportsImport(resource)}
-                    {#if adoptionMutationBlocked}
-                      <span class="muted">Import blocked by AWS safety gate</span>
+                    {#if adoptionBaselineBlocked}
+                      <span class="muted">Import blocked until discovery safety passes</span>
                     {:else}
                     <form method="POST" action="?/import">
                       <input type="hidden" name="discoveryId" value={resource.id} />
