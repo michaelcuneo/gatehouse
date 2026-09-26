@@ -240,3 +240,295 @@ export function assertImportableCloudFront(
     defaultRootObject,
   };
 }
+
+
+export type AwsDiscoveryAdoptionState =
+  | "importable"
+  | "paired"
+  | "inventory_only";
+
+export interface AwsDiscoveryAdoptionAssessment {
+  state: AwsDiscoveryAdoptionState;
+  importable: boolean;
+  reason?: string;
+  requires?: string[];
+}
+
+function assessmentFailure(
+  cause: unknown,
+): AwsDiscoveryAdoptionAssessment {
+  return {
+    state: "inventory_only",
+    importable: false,
+    reason: cause instanceof Error ? cause.message : String(cause),
+  };
+}
+
+export function assessAwsDiscoveryResource(
+  resource: AwsDiscoveredResource,
+  resources: AwsDiscoveredResource[],
+): AwsDiscoveryAdoptionAssessment {
+  try {
+    if (
+      resource.service === "s3" &&
+      resource.resourceType === "AWS::S3::Bucket"
+    ) {
+      assertImportableS3(resource);
+      return {
+        state: "importable",
+        importable: true,
+      };
+    }
+
+    if (
+      resource.service === "acm" &&
+      resource.resourceType ===
+        "AWS::CertificateManager::Certificate"
+    ) {
+      if (!resource.arn || !stringDiscoveryDetail(resource, "domains")) {
+        throw new Error(
+          "ACM discovery did not return the certificate ARN and domain set required for safe import.",
+        );
+      }
+
+      return {
+        state: "importable",
+        importable: true,
+      };
+    }
+
+    if (
+      resource.service === "dynamodb" &&
+      resource.resourceType === "AWS::DynamoDB::Table"
+    ) {
+      assertImportableDynamoDB(resource);
+      return {
+        state: "importable",
+        importable: true,
+      };
+    }
+
+    if (
+      resource.service === "cloudfront" &&
+      resource.resourceType === "AWS::CloudFront::Distribution"
+    ) {
+      const cloudFront = assertImportableCloudFront(resource);
+      const requires = [
+        `S3 bucket: ${cloudFront.bucketName}`,
+        ...(cloudFront.certificateArn
+          ? [`ACM certificate: ${cloudFront.certificateArn}`]
+          : []),
+      ];
+
+      return {
+        state: "importable",
+        importable: true,
+        requires,
+      };
+    }
+
+    if (
+      resource.service === "lambda" &&
+      resource.resourceType === "AWS::Lambda::Function"
+    ) {
+      const roleArn = stringDiscoveryDetail(resource, "roleArn");
+      const memorySize = numberDiscoveryDetail(resource, "memorySize");
+      const timeout = numberDiscoveryDetail(resource, "timeout");
+      const architecture = stringDiscoveryDetail(
+        resource,
+        "architecture",
+      );
+
+      if (
+        !roleArn ||
+        memorySize === null ||
+        timeout === null ||
+        !["x86_64", "arm64"].includes(architecture ?? "")
+      ) {
+        throw new Error(
+          "Lambda discovery did not return enough configuration to import this function safely.",
+        );
+      }
+
+      return {
+        state: "importable",
+        importable: true,
+      };
+    }
+
+    if (
+      resource.service === "route53" &&
+      resource.resourceType === "AWS::Route53::RecordSet"
+    ) {
+      const type = stringDiscoveryDetail(resource, "type");
+      const zone = stringDiscoveryDetail(resource, "zone");
+      const value = stringDiscoveryDetail(resource, "value");
+      const ttl = numberDiscoveryDetail(resource, "ttl");
+      const alias = booleanDiscoveryDetail(resource, "alias");
+      const aliasDnsName = stringDiscoveryDetail(
+        resource,
+        "aliasDnsName",
+      );
+      const valueCount = numberDiscoveryDetail(
+        resource,
+        "valueCount",
+      );
+
+      if (alias) {
+        if (
+          type === "AAAA" &&
+          zone &&
+          aliasDnsName
+        ) {
+          const pair = resources.find(
+            (candidate) =>
+              candidate.service === "route53" &&
+              candidate.resourceType === "AWS::Route53::RecordSet" &&
+              candidate.name === resource.name &&
+              stringDiscoveryDetail(candidate, "zone") === zone &&
+              stringDiscoveryDetail(candidate, "type") === "A" &&
+              booleanDiscoveryDetail(candidate, "alias") &&
+              stringDiscoveryDetail(candidate, "aliasDnsName") ===
+                aliasDnsName,
+          );
+
+          return pair
+            ? {
+                state: "paired",
+                importable: false,
+                reason:
+                  "Imported together with the matching A CloudFront alias record.",
+                requires: [`Route53 A record: ${pair.name}`],
+              }
+            : {
+                state: "inventory_only",
+                importable: false,
+                reason:
+                  "AAAA alias has no matching A CloudFront alias record in discovery.",
+              };
+        }
+
+        if (type !== "A" || !zone || !aliasDnsName) {
+          throw new Error(
+            "Only the A member of a complete CloudFront A/AAAA alias pair can be imported directly.",
+          );
+        }
+
+        const ipv6Pair = resources.find(
+          (candidate) =>
+            candidate.service === "route53" &&
+            candidate.resourceType === "AWS::Route53::RecordSet" &&
+            candidate.name === resource.name &&
+            stringDiscoveryDetail(candidate, "zone") === zone &&
+            stringDiscoveryDetail(candidate, "type") === "AAAA" &&
+            booleanDiscoveryDetail(candidate, "alias") &&
+            stringDiscoveryDetail(candidate, "aliasDnsName") ===
+              aliasDnsName,
+        );
+
+        if (!ipv6Pair) {
+          throw new Error(
+            "GateHouse requires the matching AAAA CloudFront alias before importing this DNS pair.",
+          );
+        }
+
+        const normalizedTarget = aliasDnsName
+          .replace(/\.$/, "")
+          .toLowerCase();
+        const distribution = resources.find(
+          (candidate) =>
+            candidate.service === "cloudfront" &&
+            candidate.resourceType ===
+              "AWS::CloudFront::Distribution" &&
+            String(candidate.details?.domainName ?? "")
+              .replace(/\.$/, "")
+              .toLowerCase() === normalizedTarget,
+        );
+
+        if (!distribution) {
+          throw new Error(
+            "The CloudFront distribution targeted by this Route53 alias is not present in discovery.",
+          );
+        }
+
+        return {
+          state: "importable",
+          importable: true,
+          requires: [
+            `CloudFront distribution: ${distribution.name}`,
+            `Route53 AAAA pair: ${ipv6Pair.name}`,
+          ],
+        };
+      }
+
+      if (
+        valueCount !== 1 ||
+        !zone ||
+        !value ||
+        ttl === null ||
+        !["A", "AAAA", "CNAME", "TXT"].includes(type ?? "")
+      ) {
+        throw new Error(
+          "This Route53 record is not yet representable as a GateHouse value record.",
+        );
+      }
+
+      return {
+        state: "importable",
+        importable: true,
+      };
+    }
+
+    return {
+      state: "inventory_only",
+      importable: false,
+      reason:
+        "GateHouse can inventory this AWS resource but does not have a safe adoption model for it yet.",
+    };
+  } catch (cause) {
+    return assessmentFailure(cause);
+  }
+}
+
+export function summarizeAwsDiscoveryAdoption(
+  resources: AwsDiscoveredResource[],
+): {
+  total: number;
+  importable: number;
+  paired: number;
+  inventoryOnly: number;
+  external: number;
+  observed: number;
+} {
+  let importable = 0;
+  let paired = 0;
+  let inventoryOnly = 0;
+
+  for (const resource of resources) {
+    const assessment = assessAwsDiscoveryResource(
+      resource,
+      resources,
+    );
+
+    if (assessment.state === "importable") {
+      importable += 1;
+    } else if (assessment.state === "paired") {
+      paired += 1;
+    } else {
+      inventoryOnly += 1;
+    }
+  }
+
+  return {
+    total: resources.length,
+    importable,
+    paired,
+    inventoryOnly,
+    external: resources.filter(
+      (resource) => resource.ownership === "external",
+    ).length,
+    observed: resources.filter(
+      (resource) => resource.ownership === "observed",
+    ).length,
+  };
+}
