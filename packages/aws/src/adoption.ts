@@ -628,3 +628,96 @@ export function buildAwsDiscoveryDogfoodReport(input: {
     },
   };
 }
+
+
+export interface AwsDogfoodReadinessCheck {
+  id:
+    | "read_only_lock"
+    | "account_match"
+    | "region_coverage"
+    | "discovery_warnings";
+  ok: boolean;
+  message: string;
+}
+
+export interface AwsDogfoodReadiness {
+  ready: boolean;
+  checks: AwsDogfoodReadinessCheck[];
+  blockers: string[];
+}
+
+export function evaluateAwsDogfoodReadiness(
+  stage: Pick<
+    ManagedStage,
+    | "accountId"
+    | "primaryRegion"
+    | "additionalRegions"
+    | "adoptionMode"
+  >,
+  discovery: import("./discovery").AwsStageDiscovery | null,
+): AwsDogfoodReadiness {
+  const configuredRegions = [
+    ...new Set([
+      stage.primaryRegion,
+      ...(stage.additionalRegions ?? []),
+    ].filter(Boolean)),
+  ];
+
+  const readOnly = !awsStageAdoptionEnabled(stage);
+  const accountMatches = Boolean(
+    discovery && discovery.accountId === stage.accountId,
+  );
+  const missingRegions = discovery
+    ? configuredRegions.filter(
+        (region) => !discovery.regions.includes(region),
+      )
+    : configuredRegions;
+  const warnings = discovery?.warnings ?? [];
+
+  const checks: AwsDogfoodReadinessCheck[] = [
+    {
+      id: "read_only_lock",
+      ok: readOnly,
+      message: readOnly
+        ? "AWS adoption mutation lock is active."
+        : "AWS adoption is enabled; read-only dogfood lock is not active.",
+    },
+    {
+      id: "account_match",
+      ok: accountMatches,
+      message: !discovery
+        ? "No saved AWS discovery snapshot exists."
+        : accountMatches
+          ? `Discovery account matches configured account ${stage.accountId}.`
+          : `Discovery account ${discovery.accountId} does not match configured account ${stage.accountId}.`,
+    },
+    {
+      id: "region_coverage",
+      ok: Boolean(discovery) && missingRegions.length === 0,
+      message: !discovery
+        ? "No discovery region coverage is available."
+        : missingRegions.length === 0
+          ? "All configured AWS regions are represented in discovery."
+          : `Discovery is missing configured region(s): ${missingRegions.join(", ")}.`,
+    },
+    {
+      id: "discovery_warnings",
+      ok: Boolean(discovery) && warnings.length === 0,
+      message: !discovery
+        ? "Discovery has not run yet."
+        : warnings.length === 0
+          ? "Discovery completed without warnings."
+          : `Discovery reported ${warnings.length} warning(s).`,
+    },
+  ];
+
+  const blockers = checks
+    .filter((check) => !check.ok)
+    .map((check) => check.message);
+
+  return {
+    ready: blockers.length === 0,
+    checks,
+    blockers,
+  };
+}
