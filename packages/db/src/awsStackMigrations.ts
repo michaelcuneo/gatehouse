@@ -1,6 +1,6 @@
 import { getDatabase } from "./client";
 
-export type AwsStackMigrationStatus = "prepared";
+export type AwsStackMigrationStatus = "prepared" | "ready_for_detach";
 
 export interface StoredAwsStackMigration {
   stageId: string;
@@ -115,6 +115,25 @@ export function listAwsStackMigrations(
     .all(stageId) as MigrationRow[];
 
   return rows.map(fromRow);
+}
+
+export function markAwsStackMigrationReady(
+  stageId: string,
+  stackId: string,
+): StoredAwsStackMigration | null {
+  const db = getDatabase();
+
+  db.prepare(
+    `
+      UPDATE aws_stack_migrations
+      SET status = 'ready_for_detach',
+          updated_at = ?
+      WHERE stage_id = ?
+        AND stack_id = ?
+    `,
+  ).run(new Date().toISOString(), stageId, stackId);
+
+  return getAwsStackMigration(stageId, stackId);
 }
 
 export function cancelAwsStackMigration(
