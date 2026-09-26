@@ -639,6 +639,19 @@ function resourceBelongsToStage(
   return listStageIdsForResource(resourceId).includes(stageId);
 }
 
+function adoptionLockError(
+  stage: { adoptionMode?: 'read_only' | 'enabled' }
+) {
+  if ((stage.adoptionMode ?? 'read_only') === 'enabled') {
+    return null;
+  }
+
+  return fail(423, {
+    error:
+      'This stage is in read-only AWS dogfood mode. Enable AWS adoption in stage settings before importing resources, advancing stack migration, changing ownership, or mutating AWS.'
+  });
+}
+
 export const load: PageServerLoad = async ({ params }) => {
   const context = requireStage(params);
 
@@ -710,6 +723,12 @@ export const actions: Actions = {
       });
     }
 
+    const locked = adoptionLockError(context.stage);
+
+    if (locked) {
+      return locked;
+    }
+
     const form = await request.formData();
     const stackId = String(form.get('stackId') ?? '').trim();
     const snapshot = discoverySnapshot(context.stage.id);
@@ -756,6 +775,12 @@ export const actions: Actions = {
       return fail(404, {
         error: 'Managed project stage not found.'
       });
+    }
+
+    const locked = adoptionLockError(context.stage);
+
+    if (locked) {
+      return locked;
     }
 
     const form = await request.formData();
@@ -838,6 +863,12 @@ export const actions: Actions = {
       return fail(404, {
         error: 'Managed project stage not found.'
       });
+    }
+
+    const locked = adoptionLockError(context.stage);
+
+    if (locked) {
+      return locked;
     }
 
     const form = await request.formData();
@@ -958,6 +989,12 @@ export const actions: Actions = {
       return fail(404, {
         error: 'Managed project stage not found.'
       });
+    }
+
+    const locked = adoptionLockError(context.stage);
+
+    if (locked) {
+      return locked;
     }
 
     const form = await request.formData();
@@ -1188,6 +1225,12 @@ export const actions: Actions = {
       });
     }
 
+    const locked = adoptionLockError(context.stage);
+
+    if (locked) {
+      return locked;
+    }
+
     const form = await request.formData();
     const discoveryId = String(
       form.get('discoveryId') ?? ''
@@ -1302,6 +1345,12 @@ export const actions: Actions = {
       return fail(404, {
         error: 'Managed project stage not found.'
       });
+    }
+
+    const locked = adoptionLockError(context.stage);
+
+    if (locked) {
+      return locked;
     }
 
     const form = await request.formData();
