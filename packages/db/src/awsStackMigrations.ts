@@ -167,6 +167,7 @@ export function cancelAwsStackMigration(
           DELETE FROM aws_stack_migrations
           WHERE stage_id = ?
             AND stack_id = ?
+            AND status != 'detached'
         `,
       )
       .run(stageId, stackId).changes > 0
