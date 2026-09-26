@@ -152,6 +152,37 @@
     </div>
   </section>
 
+  {#if data.adoptionGaps.length}
+    <section class="panel table-panel">
+      <span class="eyebrow">Coverage gaps</span>
+      <h2>Inventory-only resource shapes</h2>
+      <p class="muted">
+        These resources are visible to GateHouse but deliberately cannot be imported yet.
+      </p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Count</th>
+            <th>Service</th>
+            <th>AWS resource type</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.adoptionGaps as gap}
+            <tr>
+              <td><strong>{gap.count}</strong></td>
+              <td>{gap.service}</td>
+              <td class="mono">{gap.resourceType}</td>
+              <td>{gap.reason}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/if}
+
   <p class="muted mono">
     Last scanned {new Date(data.discovery.scannedAt).toLocaleString()}
   </p>
