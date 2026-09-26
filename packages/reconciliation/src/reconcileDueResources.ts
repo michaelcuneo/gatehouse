@@ -70,7 +70,7 @@ function reconciliationIsStale(
   return updatedAt === null || now - updatedAt >= interval;
 }
 
-function resourceIsDue(
+export function resourceIsDue(
   resource: Resource,
   now: number,
   options: Required<
