@@ -540,3 +540,91 @@ export function awsStageAdoptionEnabled(
 ): boolean {
   return (stage.adoptionMode ?? "read_only") === "enabled";
 }
+
+
+export interface AwsDiscoveryDogfoodReport {
+  format: "gatehouse-aws-discovery-report";
+  version: 1;
+  exportedAt: string;
+  project: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  stage: {
+    id: string;
+    name: string;
+    accountId: string;
+    primaryRegion: string;
+    additionalRegions: string[];
+    adoptionMode: "read_only" | "enabled";
+  };
+  discovery: {
+    accountId: string;
+    scannedAt: string;
+    regions: string[];
+    warnings: string[];
+    stacks: import("./discovery").AwsDiscoveredStack[];
+    summary: ReturnType<typeof summarizeAwsDiscoveryAdoption>;
+    resources: Array<
+      import("./discovery").AwsDiscoveredResource & {
+        adoption: AwsDiscoveryAdoptionAssessment;
+      }
+    >;
+  };
+}
+
+export function buildAwsDiscoveryDogfoodReport(input: {
+  project: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  stage: Pick<
+    ManagedStage,
+    | "id"
+    | "name"
+    | "accountId"
+    | "primaryRegion"
+    | "additionalRegions"
+    | "adoptionMode"
+  >;
+  discovery: import("./discovery").AwsStageDiscovery;
+  exportedAt?: string;
+}): AwsDiscoveryDogfoodReport {
+  const { discovery } = input;
+
+  return {
+    format: "gatehouse-aws-discovery-report",
+    version: 1,
+    exportedAt: input.exportedAt ?? new Date().toISOString(),
+    project: {
+      id: input.project.id,
+      name: input.project.name,
+      slug: input.project.slug,
+    },
+    stage: {
+      id: input.stage.id,
+      name: input.stage.name,
+      accountId: input.stage.accountId,
+      primaryRegion: input.stage.primaryRegion,
+      additionalRegions: input.stage.additionalRegions ?? [],
+      adoptionMode: input.stage.adoptionMode ?? "read_only",
+    },
+    discovery: {
+      accountId: discovery.accountId,
+      scannedAt: discovery.scannedAt,
+      regions: discovery.regions,
+      warnings: discovery.warnings,
+      stacks: discovery.stacks,
+      summary: summarizeAwsDiscoveryAdoption(discovery.resources),
+      resources: discovery.resources.map((resource) => ({
+        ...resource,
+        adoption: assessAwsDiscoveryResource(
+          resource,
+          discovery.resources,
+        ),
+      })),
+    },
+  };
+}
