@@ -655,6 +655,26 @@ function adoptionLockError(
   });
 }
 
+function adoptionBaselineError(
+  stageId: string,
+  stage: Parameters<typeof evaluateAwsAdoptionUnlockReadiness>[0]
+) {
+  const readiness = evaluateAwsAdoptionUnlockReadiness(
+    stage,
+    discoverySnapshot(stageId)
+  );
+
+  if (!readiness.ready) {
+    return fail(409, {
+      error:
+        'AWS discovery safety baseline does not pass. Refresh Discovery before importing or advancing adoption planning: ' +
+        readiness.blockers.join(' ')
+    });
+  }
+
+  return null;
+}
+
 function adoptionMutationError(
   stageId: string,
   stage: Parameters<typeof evaluateAwsAdoptionUnlockReadiness>[0]
@@ -665,16 +685,15 @@ function adoptionMutationError(
     return locked;
   }
 
-  const readiness = evaluateAwsAdoptionUnlockReadiness(
-    stage,
-    discoverySnapshot(stageId)
+  const baseline = adoptionBaselineError(
+    stageId,
+    stage
   );
 
-  if (!readiness.ready) {
+  if (baseline) {
     return fail(409, {
       error:
-        'AWS adoption safety preflight no longer passes. Refresh Discovery before mutating AWS or ownership: ' +
-        readiness.blockers.join(' ')
+        'AWS adoption safety preflight no longer passes. Refresh Discovery before mutating AWS or ownership.'
     });
   }
 
@@ -761,7 +780,7 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionMutationError(
+    const locked = adoptionBaselineError(
       context.stage.id,
       context.stage
     );
@@ -818,7 +837,7 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionMutationError(
+    const locked = adoptionBaselineError(
       context.stage.id,
       context.stage
     );
@@ -1275,7 +1294,7 @@ export const actions: Actions = {
       });
     }
 
-    const locked = adoptionMutationError(
+    const locked = adoptionBaselineError(
       context.stage.id,
       context.stage
     );
