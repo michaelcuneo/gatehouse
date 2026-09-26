@@ -124,7 +124,7 @@ Existing infrastructure is never made GateHouse-owned merely because discovery f
 
 Each registered AWS stage has a Discovery view.
 
-New and migrated AWS stages default to **read-only dogfood mode**. In this mode GateHouse can verify AWS access, refresh discovery, classify ownership, run read-only comparisons and export discovery reports, but it blocks imports, ownership transfer, stack-migration progression and AWS adoption mutations. Adoption must be explicitly enabled in Stage settings.
+New and migrated AWS stages default to **read-only dogfood mode**. In this mode GateHouse can verify AWS access, refresh discovery, classify ownership, import supported resources into local observed/external state, run dry-run health comparisons, prepare and verify migration plans, and export discovery reports. It blocks AWS mutations and GateHouse ownership takeover. Adoption must be explicitly enabled in Stage settings before retention changes, stack detach or ownership transfer can occur.
 
 GateHouse currently discovers:
 
@@ -135,10 +135,14 @@ GateHouse currently discovers:
 - CloudFront distributions
 - Lambda functions
 - DynamoDB tables
+- CloudWatch Logs log groups
+- CloudWatch metric and composite alarms
 
-Discovery is read-only and persisted locally as a stage snapshot.
+Discovery is read-only and persisted locally as a stage snapshot. Each scan records explicit service/region probe coverage, so "zero resources found" is distinguishable from "the service could not be inspected." Incomplete probes, warnings, stale snapshots, disabled stages, account mismatches or missing configured regions block adoption safety.
 
-Discovery can also export a versioned read-only estate report containing the saved scan, ownership classification, adoption eligibility, dependency requirements and warnings. The report contains no AWS credentials and does not mutate AWS.
+CloudWatch Logs and CloudWatch alarms are currently inventory-only: GateHouse discovers and classifies them but will not import them as managed resources until their full lifecycle/configuration models are represented safely.
+
+Discovery can also export a versioned read-only estate report containing the saved scan, service-probe coverage, ownership classification, adoption eligibility, local import state, dependency requirements, readiness checks and warnings. The report contains no AWS credentials and does not mutate AWS.
 
 Supported resources can follow this flow:
 
@@ -152,6 +156,8 @@ Observed / External
 Dry run against live AWS
     ↓
 Exact match
+    ↓
+Enable adoption (fresh safety baseline required)
     ↓
 Take control
     ↓
