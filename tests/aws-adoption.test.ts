@@ -8,6 +8,7 @@ import {
   assessAwsDiscoveryResource,
   awsStageAdoptionEnabled,
   buildAwsDiscoveryDogfoodReport,
+  evaluateAwsAdoptionUnlockReadiness,
   evaluateAwsDogfoodReadiness,
   s3BucketFromOriginDomain,
   summarizeAwsDiscoveryAdoption,
@@ -655,5 +656,73 @@ test("CloudWatch logs and alarms remain visible but inventory-only", () => {
   assert.match(
     alarmAssessment.reason ?? "",
     /represent alarm metrics, dimensions, actions and evaluation settings exactly/i,
+  );
+});
+
+
+test("adoption unlock preflight evaluates the proposed stage under the read-only lock", () => {
+  const stage = {
+    accountId: "123456789012",
+    primaryRegion: "ap-southeast-2",
+    additionalRegions: ["us-east-1"],
+    adoptionMode: "enabled" as const,
+  };
+
+  const discovery = {
+    accountId: "123456789012",
+    scannedAt: "2026-09-26T10:00:00.000Z",
+    regions: ["ap-southeast-2", "us-east-1"],
+    stacks: [],
+    resources: [],
+    warnings: [],
+  } as any;
+
+  const ready = evaluateAwsAdoptionUnlockReadiness(
+    stage,
+    discovery,
+    {
+      now: Date.parse("2026-09-26T10:05:00.000Z"),
+    },
+  );
+
+  assert.equal(ready.ready, true);
+  assert.equal(
+    ready.checks.find(
+      (check) => check.id === "read_only_lock",
+    )?.ok,
+    true,
+  );
+
+  const stale = evaluateAwsAdoptionUnlockReadiness(
+    stage,
+    discovery,
+    {
+      now: Date.parse("2026-09-26T11:00:00.000Z"),
+    },
+  );
+
+  assert.equal(stale.ready, false);
+  assert.ok(
+    stale.blockers.some((value) =>
+      value.includes("snapshot is stale"),
+    ),
+  );
+
+  const warned = evaluateAwsAdoptionUnlockReadiness(
+    stage,
+    {
+      ...discovery,
+      warnings: ["CloudWatch denied"],
+    },
+    {
+      now: Date.parse("2026-09-26T10:05:00.000Z"),
+    },
+  );
+
+  assert.equal(warned.ready, false);
+  assert.ok(
+    warned.blockers.some((value) =>
+      value.includes("1 warning"),
+    ),
   );
 });
