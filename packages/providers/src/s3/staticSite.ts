@@ -597,7 +597,7 @@ export async function healthS3StaticSite(
     );
 
     if (
-      liveBucket !== storage.spec.bucket ||
+      liveBucket !== bucketSpec(storage).bucket ||
       normalizedOriginPath(distribution.originPath) !==
         normalizedOriginPath(resource.spec.prefix)
     ) {
