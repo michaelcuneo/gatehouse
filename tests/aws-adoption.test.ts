@@ -11,6 +11,7 @@ import {
   evaluateAwsDogfoodReadiness,
   s3BucketFromOriginDomain,
   summarizeAwsDiscoveryAdoption,
+  summarizeAwsDiscoveryAdoptionGaps,
 } from "../packages/aws/src/adoption.ts";
 
 function discovered(
@@ -535,4 +536,47 @@ test("dogfood readiness requires lock, account match, full region coverage and n
 
   assert.equal(unscanned.ready, false);
   assert.ok(unscanned.blockers.length >= 3);
+});
+
+
+test("adoption gap summary groups identical unsupported resource shapes", () => {
+  const resources = [
+    {
+      id: "queue-1",
+      service: "cloudformation",
+      resourceType: "AWS::SQS::Queue",
+      name: "QueueOne",
+      physicalId: "queue-one",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "queue-2",
+      service: "cloudformation",
+      resourceType: "AWS::SQS::Queue",
+      name: "QueueTwo",
+      physicalId: "queue-two",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "topic-1",
+      service: "cloudformation",
+      resourceType: "AWS::SNS::Topic",
+      name: "Topic",
+      physicalId: "topic",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+  ] as any[];
+
+  const gaps = summarizeAwsDiscoveryAdoptionGaps(
+    resources,
+  );
+
+  assert.equal(gaps.length, 2);
+  assert.equal(gaps[0]?.resourceType, "AWS::SQS::Queue");
+  assert.equal(gaps[0]?.count, 2);
+  assert.equal(gaps[1]?.resourceType, "AWS::SNS::Topic");
+  assert.equal(gaps[1]?.count, 1);
 });
