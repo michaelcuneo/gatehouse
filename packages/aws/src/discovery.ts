@@ -110,6 +110,40 @@ export function normalisePhysicalId(value: string): string[] {
   ];
 }
 
+export function mergeStackFallbackResources(
+  discovered: AwsDiscoveredResource[],
+  stackResources: AwsDiscoveredResource[],
+): AwsDiscoveredResource[] {
+  const merged = [...discovered];
+  const representedPhysicalIds = new Set(
+    discovered.flatMap((resource) =>
+      normalisePhysicalId(resource.physicalId),
+    ),
+  );
+
+  for (const resource of stackResources) {
+    const represented = normalisePhysicalId(
+      resource.physicalId,
+    ).some((physicalId) =>
+      representedPhysicalIds.has(physicalId),
+    );
+
+    if (represented) {
+      continue;
+    }
+
+    merged.push(resource);
+
+    for (const physicalId of normalisePhysicalId(
+      resource.physicalId,
+    )) {
+      representedPhysicalIds.add(physicalId);
+    }
+  }
+
+  return merged;
+}
+
 export function stackOwnerType(
   description: string | undefined,
   tags: { Key?: string; Value?: string }[] | undefined,
@@ -838,23 +872,14 @@ export async function discoverAwsStage(
     );
   }
 
-  const representedPhysicalIds = new Set(
-    resources.flatMap((resource) =>
-      normalisePhysicalId(resource.physicalId),
+  resources.splice(
+    0,
+    resources.length,
+    ...mergeStackFallbackResources(
+      resources,
+      stackResources,
     ),
   );
-
-  for (const resource of stackResources) {
-    const represented = normalisePhysicalId(
-      resource.physicalId,
-    ).some((physicalId) =>
-      representedPhysicalIds.has(physicalId),
-    );
-
-    if (!represented) {
-      resources.push(resource);
-    }
-  }
 
   resources.sort((a, b) =>
     a.service.localeCompare(b.service) ||
