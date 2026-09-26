@@ -778,6 +778,31 @@ export function evaluateAwsDogfoodReadiness(
 }
 
 
+export function evaluateAwsAdoptionUnlockReadiness(
+  stage: Pick<
+    ManagedStage,
+    | "accountId"
+    | "primaryRegion"
+    | "additionalRegions"
+    | "adoptionMode"
+  >,
+  discovery: import("./discovery").AwsStageDiscovery | null,
+  options: {
+    now?: number;
+    maxSnapshotAgeMs?: number;
+  } = {},
+): AwsDogfoodReadiness {
+  return evaluateAwsDogfoodReadiness(
+    {
+      ...stage,
+      adoptionMode: "read_only",
+    },
+    discovery,
+    options,
+  );
+}
+
+
 export interface AwsDiscoveryAdoptionGap {
   service: AwsDiscoveredResource["service"];
   resourceType: string;
