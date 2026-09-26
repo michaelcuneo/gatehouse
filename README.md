@@ -124,6 +124,8 @@ Existing infrastructure is never made GateHouse-owned merely because discovery f
 
 Each registered AWS stage has a Discovery view.
 
+New and migrated AWS stages default to **read-only dogfood mode**. In this mode GateHouse can verify AWS access, refresh discovery, classify ownership, run read-only comparisons and export discovery reports, but it blocks imports, ownership transfer, stack-migration progression and AWS adoption mutations. Adoption must be explicitly enabled in Stage settings.
+
 GateHouse currently discovers:
 
 - CloudFormation stacks
@@ -135,6 +137,8 @@ GateHouse currently discovers:
 - DynamoDB tables
 
 Discovery is read-only and persisted locally as a stage snapshot.
+
+Discovery can also export a versioned read-only estate report containing the saved scan, ownership classification, adoption eligibility, dependency requirements and warnings. The report contains no AWS credentials and does not mutate AWS.
 
 Supported resources can follow this flow:
 
