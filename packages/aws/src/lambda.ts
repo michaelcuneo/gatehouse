@@ -82,7 +82,6 @@ export async function reconcileLambdaFunctionConfiguration(
       Handler: spec.handler,
       MemorySize: spec.memorySize,
       Timeout: spec.timeout,
-      Architectures: [spec.architecture],
     }),
   );
 }
