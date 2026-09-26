@@ -618,6 +618,22 @@ test("dogfood readiness requires lock, account match, full region coverage and n
     ),
   );
 
+  const legacySnapshot = evaluateAwsDogfoodReadiness(
+    stage,
+    {
+      ...healthyDiscovery,
+      coverage: undefined,
+    },
+    readinessOptions,
+  );
+
+  assert.equal(legacySnapshot.ready, false);
+  assert.ok(
+    legacySnapshot.blockers.some((value) =>
+      value.includes("did not run all expected service probes"),
+    ),
+  );
+
   const incompleteCoverage = evaluateAwsDogfoodReadiness(
     stage,
     {
