@@ -461,9 +461,14 @@ test("dogfood readiness requires lock, account match, full region coverage and n
     warnings: [],
   } as any;
 
+  const readinessOptions = {
+    now: Date.parse("2026-09-26T10:10:00.000Z"),
+  };
+
   const ready = evaluateAwsDogfoodReadiness(
     stage,
     healthyDiscovery,
+    readinessOptions,
   );
 
   assert.equal(ready.ready, true);
@@ -475,6 +480,7 @@ test("dogfood readiness requires lock, account match, full region coverage and n
       adoptionMode: "enabled",
     },
     healthyDiscovery,
+    readinessOptions,
   );
 
   assert.equal(unlocked.ready, false);
@@ -490,6 +496,7 @@ test("dogfood readiness requires lock, account match, full region coverage and n
       ...healthyDiscovery,
       accountId: "999999999999",
     },
+    readinessOptions,
   );
 
   assert.equal(wrongAccount.ready, false);
@@ -505,6 +512,7 @@ test("dogfood readiness requires lock, account match, full region coverage and n
       ...healthyDiscovery,
       regions: ["ap-southeast-2"],
     },
+    readinessOptions,
   );
 
   assert.equal(missingRegion.ready, false);
@@ -520,6 +528,7 @@ test("dogfood readiness requires lock, account match, full region coverage and n
       ...healthyDiscovery,
       warnings: ["AccessDenied on service"],
     },
+    readinessOptions,
   );
 
   assert.equal(warned.ready, false);
@@ -529,9 +538,25 @@ test("dogfood readiness requires lock, account match, full region coverage and n
     ),
   );
 
+  const stale = evaluateAwsDogfoodReadiness(
+    stage,
+    healthyDiscovery,
+    {
+      now: Date.parse("2026-09-26T11:00:00.000Z"),
+    },
+  );
+
+  assert.equal(stale.ready, false);
+  assert.ok(
+    stale.blockers.some((value) =>
+      value.includes("snapshot is stale"),
+    ),
+  );
+
   const unscanned = evaluateAwsDogfoodReadiness(
     stage,
     null,
+    readinessOptions,
   );
 
   assert.equal(unscanned.ready, false);
