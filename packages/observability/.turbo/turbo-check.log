@@ -1,5 +1,0 @@
-
-
-> @gatehouse/observability@ check /home/michael/gatehouse/packages/observability
-> tsc --noEmit
-

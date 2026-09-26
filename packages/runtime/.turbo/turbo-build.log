@@ -1,5 +1,0 @@
-
-
-> @gatehouse/runtime@ build /home/michael/gatehouse/packages/runtime
-> tsc --noEmit
-

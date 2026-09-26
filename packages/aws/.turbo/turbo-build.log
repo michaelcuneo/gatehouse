@@ -1,5 +1,0 @@
-
-
-> @gatehouse/aws@ build /home/michael/gatehouse/packages/aws
-> tsc --noEmit
-

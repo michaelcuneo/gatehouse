@@ -1,5 +1,0 @@
-
-
-> @gatehouse/types@ build /home/michael/gatehouse/packages/types
-> tsc --noEmit
-

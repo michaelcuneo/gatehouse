@@ -1,5 +1,0 @@
-
-
-> @gatehouse/core@ check /home/michael/gatehouse/packages/core
-> tsc --noEmit
-
