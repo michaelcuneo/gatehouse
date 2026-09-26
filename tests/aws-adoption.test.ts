@@ -5,7 +5,9 @@ import {
   assertImportableCloudFront,
   assertImportableDynamoDB,
   assertImportableS3,
+  assessAwsDiscoveryResource,
   s3BucketFromOriginDomain,
+  summarizeAwsDiscoveryAdoption,
 } from "../packages/aws/src/adoption.ts";
 
 function discovered(
@@ -239,4 +241,122 @@ test("CloudFront aliases require a discovered ACM certificate ARN", () => {
     accepted.certificateArn,
     "arn:aws:acm:us-east-1:123456789012:certificate/test",
   );
+});
+
+
+test("discovery assessment handles Route53 CloudFront alias pairs consistently", () => {
+  const distribution = {
+    id: "cloudfront:D123",
+    service: "cloudfront",
+    resourceType: "AWS::CloudFront::Distribution",
+    name: "www.example.com",
+    physicalId: "D123",
+    region: "global",
+    ownership: "observed",
+    details: {
+      domainName: "d123.cloudfront.net",
+      originCount: 1,
+      originId: "origin-1",
+      originDomainName: "bucket.s3.amazonaws.com",
+      originPath: "",
+      originIsS3: true,
+      defaultTargetOriginId: "origin-1",
+      cacheBehaviors: 0,
+      lambdaAssociations: 0,
+      functionAssociations: 0,
+      aliases: JSON.stringify(["www.example.com"]),
+      certificateArn:
+        "arn:aws:acm:us-east-1:123456789012:certificate/test",
+      defaultRootObject: "index.html",
+    },
+  } as any;
+
+  const a = {
+    id: "route53:a",
+    service: "route53",
+    resourceType: "AWS::Route53::RecordSet",
+    name: "www.example.com.",
+    physicalId: "www.example.com",
+    region: "global",
+    ownership: "observed",
+    details: {
+      zone: "example.com",
+      type: "A",
+      alias: true,
+      aliasDnsName: "d123.cloudfront.net",
+      valueCount: 0,
+    },
+  } as any;
+
+  const aaaa = {
+    ...a,
+    id: "route53:aaaa",
+    details: {
+      ...a.details,
+      type: "AAAA",
+    },
+  } as any;
+
+  const resources = [distribution, a, aaaa];
+
+  const aAssessment = assessAwsDiscoveryResource(
+    a,
+    resources,
+  );
+  const aaaaAssessment = assessAwsDiscoveryResource(
+    aaaa,
+    resources,
+  );
+
+  assert.equal(aAssessment.state, "importable");
+  assert.equal(aAssessment.importable, true);
+  assert.ok(
+    aAssessment.requires?.some((value) =>
+      value.includes("CloudFront distribution"),
+    ),
+  );
+
+  assert.equal(aaaaAssessment.state, "paired");
+  assert.equal(aaaaAssessment.importable, false);
+});
+
+test("discovery summary separates importable, paired, inventory-only and ownership counts", () => {
+  const resources = [
+    discovered("s3", "AWS::S3::Bucket", {
+      blockPublicAcls: true,
+      ignorePublicAcls: true,
+      blockPublicPolicy: true,
+      restrictPublicBuckets: true,
+    }),
+    {
+      ...discovered("s3", "AWS::S3::Bucket", {
+        blockPublicAcls: true,
+        ignorePublicAcls: false,
+        blockPublicPolicy: true,
+        restrictPublicBuckets: true,
+      }),
+      id: "resource-2",
+      ownership: "external",
+    },
+    {
+      id: "unknown-1",
+      service: "route53",
+      resourceType: "AWS::Route53::HostedZone",
+      name: "example.com.",
+      physicalId: "Z123",
+      region: "global",
+      ownership: "observed",
+    },
+  ] as any[];
+
+  const summary = summarizeAwsDiscoveryAdoption(resources);
+
+  assert.deepEqual(summary, {
+    total: 3,
+    importable: 1,
+    paired: 0,
+    inventoryOnly: 2,
+    external: 1,
+    observed: 2,
+  });
 });
