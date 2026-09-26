@@ -116,6 +116,37 @@ test("GateHouse state export and restore round-trip in an isolated runtime", asy
 
     const exported = db.exportGateHouseState();
 
+    const invalid = structuredClone(exported);
+    invalid.tables.managed_project_resources.push({
+      stage_id: "missing-stage",
+      resource_id: "resource-1",
+      created_at: now,
+    });
+
+    assert.throws(
+      () => db.restoreGateHouseState(invalid),
+      /foreign key constraint failed/i,
+    );
+
+    const afterFailedRestore = db.exportGateHouseState();
+
+    assert.deepEqual(
+      afterFailedRestore.tables.managed_projects,
+      exported.tables.managed_projects,
+    );
+    assert.deepEqual(
+      afterFailedRestore.tables.managed_project_stages,
+      exported.tables.managed_project_stages,
+    );
+    assert.deepEqual(
+      afterFailedRestore.tables.resources,
+      exported.tables.resources,
+    );
+    assert.deepEqual(
+      afterFailedRestore.tables.managed_project_resources,
+      exported.tables.managed_project_resources,
+    );
+
     assert.equal(exported.tables.managed_projects.length, 1);
     assert.equal(exported.tables.managed_project_stages.length, 1);
     assert.equal(exported.tables.resources.length, 1);
