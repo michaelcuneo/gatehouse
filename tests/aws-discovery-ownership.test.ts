@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   discovered,
+  mergeStackFallbackResources,
   normalisePhysicalId,
   ownerFor,
   stackOwnerType,
@@ -119,4 +120,51 @@ test("discovered resources are external only when a stack owner matches", () => 
 
   assert.equal(observed.ownership, "observed");
   assert.equal(observed.owner, undefined);
+});
+
+
+test("generic CloudFormation child inventory only fills unsupported discovery gaps", () => {
+  const specific = [
+    {
+      id: "route53:record",
+      service: "route53",
+      resourceType: "AWS::Route53::RecordSet",
+      name: "www.example.com.",
+      physicalId: "WWW.Example.COM.",
+      region: "global",
+      ownership: "external",
+    },
+  ] as any[];
+
+  const fallbacks = [
+    {
+      id: "cloudformation:record",
+      service: "cloudformation",
+      resourceType: "AWS::Route53::RecordSet",
+      name: "DnsRecord",
+      physicalId: "www.example.com",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "cloudformation:queue",
+      service: "cloudformation",
+      resourceType: "AWS::SQS::Queue",
+      name: "WorkerQueue",
+      physicalId:
+        "https://sqs.ap-southeast-2.amazonaws.com/123456789012/worker",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+  ] as any[];
+
+  const merged = mergeStackFallbackResources(
+    specific,
+    fallbacks,
+  );
+
+  assert.deepEqual(
+    merged.map((resource) => resource.id),
+    ["route53:record", "cloudformation:queue"],
+  );
 });
