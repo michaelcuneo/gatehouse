@@ -1,9 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-import { assertAwsStageAccess } from '@gatehouse/aws';
+import {
+  assertAwsStageAccess,
+  summarizeAwsDiscoveryAdoption,
+  type AwsStageDiscovery
+} from '@gatehouse/aws';
 import {
   deleteAwsDiscoverySnapshot,
+  getAwsDiscoverySnapshot,
   getManagedStage,
   listResourcesForStage,
   saveManagedProject
@@ -47,6 +52,24 @@ function stageContext(
 export const load: PageServerLoad = async ({ params }) => {
   const context = stageContext(params.project, params.stage);
   const resources = listResourcesForStage(context.stage.id);
+  const discoverySnapshot =
+    getAwsDiscoverySnapshot<AwsStageDiscovery>(
+      context.stage.id
+    );
+  const discovery = discoverySnapshot?.payload ?? null;
+  const dogfood = {
+    readOnly:
+      (context.stage.adoptionMode ?? 'read_only') !==
+      'enabled',
+    scanned: Boolean(discovery),
+    scannedAt: discovery?.scannedAt ?? null,
+    warnings: discovery?.warnings ?? [],
+    summary: discovery
+      ? summarizeAwsDiscoveryAdoption(
+          discovery.resources
+        )
+      : null
+  };
 
   try {
     const identity = await assertAwsStageAccess(context.stage);
@@ -54,6 +77,7 @@ export const load: PageServerLoad = async ({ params }) => {
     return {
       ...context,
       resources,
+      dogfood,
       aws: {
         ok: true as const,
         identity
@@ -63,6 +87,7 @@ export const load: PageServerLoad = async ({ params }) => {
     return {
       ...context,
       resources,
+      dogfood,
       aws: {
         ok: false as const,
         error: cause instanceof Error ? cause.message : String(cause)
