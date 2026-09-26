@@ -216,6 +216,20 @@
     <p class="muted mono">
       Stack migration plan removed. AWS ownership is unchanged.
     </p>
+  {:else if form?.action === 'verifyMigration' && form?.success}
+    <p class="muted mono">
+      Stack migration verified. GateHouse is ready for the external ownership detach step; AWS ownership is still unchanged.
+    </p>
+  {/if}
+
+  {#if form?.action === 'verifyMigration' && form?.blockers?.length}
+    <section class="panel">
+      <span class="eyebrow">Migration blockers</span>
+      <h2>Stack is not ready to detach</h2>
+      {#each form.blockers as blocker}
+        <p class="error mono">{blocker}</p>
+      {/each}
+    </section>
   {/if}
 
   <div class="metric-grid dashboard-metrics">
@@ -295,10 +309,26 @@
               </td>
               <td>
                 {#if migration}
-                  <span class="status status-pending">prepared</span>
+                  <span class={migration.status === 'ready_for_detach' ? 'status status-ready' : 'status status-pending'}>
+                    {migration.status}
+                  </span>
                   <div class="muted">
                     AWS remains {stack.ownerType}-owned
                   </div>
+
+                  {#if migration.status === 'prepared'}
+                    <form method="POST" action="?/verifyMigration">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="button" type="submit">
+                        Verify migration
+                      </button>
+                    </form>
+                  {:else}
+                    <p class="muted">
+                      GateHouse found no local readiness blockers. Detach the external stack ownership before promoting child resources.
+                    </p>
+                  {/if}
+
                   <form method="POST" action="?/cancelMigration">
                     <input type="hidden" name="stackId" value={stack.id} />
                     <button class="pill" type="submit">
