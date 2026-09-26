@@ -737,6 +737,11 @@ export const load: PageServerLoad = async ({ params }) => {
     imported,
     stackMigrations,
     adoption,
+    adoptionSafety:
+      evaluateAwsAdoptionUnlockReadiness(
+        context.stage,
+        discovery
+      ),
     adoptionSummary:
       summarizeAwsDiscoveryAdoption(discovery.resources),
     adoptionGaps:
