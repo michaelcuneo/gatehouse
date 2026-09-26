@@ -13,6 +13,7 @@ import {
   getManagedStage,
   listAwsStackMigrations,
   listStageIdsForResource,
+  markAwsStackMigrationReady,
   prepareAwsStackMigration,
   saveAwsDiscoverySnapshot
 } from '@gatehouse/db';
@@ -66,6 +67,40 @@ function importedResource(discoveryId: string) {
         resource.metadata.importedFrom.discoveryId === discoveryId
     ) ?? null
   );
+}
+
+function importedResourceForDiscovered(
+  discovered: AwsDiscoveredResource,
+  discovery: AwsStageDiscovery
+) {
+  const direct = importedResource(discovered.id);
+
+  if (direct) {
+    return direct;
+  }
+
+  if (
+    discovered.service === 'route53' &&
+    discovered.resourceType === 'AWS::Route53::RecordSet' &&
+    discovered.details?.alias === true &&
+    discovered.details?.type === 'AAAA'
+  ) {
+    const pair = discovery.resources.find(
+      (candidate) =>
+        candidate.service === 'route53' &&
+        candidate.resourceType === 'AWS::Route53::RecordSet' &&
+        candidate.name === discovered.name &&
+        candidate.details?.zone === discovered.details?.zone &&
+        candidate.details?.type === 'A' &&
+        candidate.details?.alias === true &&
+        candidate.details?.aliasDnsName ===
+          discovered.details?.aliasDnsName
+    );
+
+    return pair ? importedResource(pair.id) : null;
+  }
+
+  return null;
 }
 
 function booleanDetail(
@@ -808,6 +843,88 @@ export const actions: Actions = {
       action: 'prepareMigration',
       stackId: stack.id,
       childCount: children.length
+    };
+  },
+
+  verifyMigration: async ({ params, request }) => {
+    const context = getManagedStage(params.project, params.stage);
+
+    if (!context) {
+      return fail(404, {
+        error: 'Managed project stage not found.'
+      });
+    }
+
+    const form = await request.formData();
+    const stackId = String(form.get('stackId') ?? '').trim();
+
+    const discovery = await scan(
+      context.stage.id,
+      context.stage
+    );
+    const stack = discovery.stacks.find(
+      (candidate) => candidate.id === stackId
+    );
+
+    if (!stack) {
+      return fail(404, {
+        error: 'Stack is not present in the refreshed discovery inventory.'
+      });
+    }
+
+    const children = discovery.resources.filter(
+      (resource) => resource.owner?.id === stack.id
+    );
+    const blockers: string[] = [];
+
+    if (stack.resourceCount > children.length) {
+      blockers.push(
+        `${stack.resourceCount - children.length} stack resource(s) are not represented by GateHouse discovery yet`
+      );
+    }
+
+    for (const child of children) {
+      const imported = importedResourceForDiscovered(
+        child,
+        discovery
+      );
+
+      if (!imported) {
+        blockers.push(
+          `${child.resourceType} ${child.name} is not imported into GateHouse`
+        );
+        continue;
+      }
+
+      const healthy = await checkResourceHealth(imported.id);
+
+      if (healthy !== true) {
+        blockers.push(
+          `${child.resourceType} ${child.name} does not match its imported GateHouse model`
+        );
+      }
+    }
+
+    if (blockers.length) {
+      return fail(409, {
+        error:
+          'Stack migration is not ready for external detach.',
+        action: 'verifyMigration',
+        stackId,
+        blockers
+      });
+    }
+
+    markAwsStackMigrationReady(
+      context.stage.id,
+      stack.id
+    );
+
+    return {
+      success: true,
+      action: 'verifyMigration',
+      stackId: stack.id,
+      readyForDetach: true
     };
   },
 
