@@ -236,3 +236,159 @@ test("native observability discovery suppresses duplicate stack fallbacks withou
     ],
   );
 });
+
+
+test("CloudFormation ownership resolves identical regional physical IDs by region", () => {
+  const ownership = new Map<string, any>();
+
+  ownership.set("shared-function", [
+    {
+      type: "cloudformation",
+      id: "stack-sydney",
+      name: "sydney-stack",
+      logicalId: "Function",
+      resourceType: "AWS::Lambda::Function",
+      region: "ap-southeast-2",
+    },
+    {
+      type: "cloudformation",
+      id: "stack-virginia",
+      name: "virginia-stack",
+      logicalId: "Function",
+      resourceType: "AWS::Lambda::Function",
+      region: "us-east-1",
+    },
+  ]);
+
+  assert.deepEqual(
+    ownerFor(
+      "shared-function",
+      ownership,
+      {
+        resourceType: "AWS::Lambda::Function",
+        region: "ap-southeast-2",
+      },
+    ),
+    {
+      type: "cloudformation",
+      id: "stack-sydney",
+      name: "sydney-stack",
+      logicalId: "Function",
+    },
+  );
+
+  assert.deepEqual(
+    ownerFor(
+      "shared-function",
+      ownership,
+      {
+        resourceType: "AWS::Lambda::Function",
+        region: "us-east-1",
+      },
+    ),
+    {
+      type: "cloudformation",
+      id: "stack-virginia",
+      name: "virginia-stack",
+      logicalId: "Function",
+    },
+  );
+
+  assert.equal(
+    ownerFor(
+      "shared-function",
+      ownership,
+      {
+        resourceType: "AWS::Lambda::Function",
+        region: "eu-west-1",
+      },
+    ),
+    undefined,
+  );
+});
+
+test("ownership matching prefers resource type before accepting a physical-id collision", () => {
+  const ownership = new Map<string, any>();
+
+  ownership.set("shared-name", [
+    {
+      type: "cloudformation",
+      id: "stack-table",
+      name: "table-stack",
+      logicalId: "Table",
+      resourceType: "AWS::DynamoDB::Table",
+      region: "ap-southeast-2",
+    },
+    {
+      type: "cloudformation",
+      id: "stack-function",
+      name: "function-stack",
+      logicalId: "Function",
+      resourceType: "AWS::Lambda::Function",
+      region: "ap-southeast-2",
+    },
+  ]);
+
+  assert.deepEqual(
+    ownerFor(
+      "shared-name",
+      ownership,
+      {
+        resourceType: "AWS::DynamoDB::Table",
+        region: "ap-southeast-2",
+      },
+    ),
+    {
+      type: "cloudformation",
+      id: "stack-table",
+      name: "table-stack",
+      logicalId: "Table",
+    },
+  );
+});
+
+test("fallback de-duplication keeps same-named regional resources in different regions", () => {
+  const specific = [
+    {
+      id: "lambda:ap-southeast-2:shared",
+      service: "lambda",
+      resourceType: "AWS::Lambda::Function",
+      name: "shared",
+      physicalId: "shared",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+  ] as any[];
+
+  const fallbacks = [
+    {
+      id: "cloudformation:ap-southeast-2:shared",
+      service: "cloudformation",
+      resourceType: "AWS::Lambda::Function",
+      name: "Function",
+      physicalId: "shared",
+      region: "ap-southeast-2",
+      ownership: "external",
+    },
+    {
+      id: "cloudformation:us-east-1:shared",
+      service: "cloudformation",
+      resourceType: "AWS::Lambda::Function",
+      name: "Function",
+      physicalId: "shared",
+      region: "us-east-1",
+      ownership: "external",
+    },
+  ] as any[];
+
+  assert.deepEqual(
+    mergeStackFallbackResources(
+      specific,
+      fallbacks,
+    ).map((resource) => resource.id),
+    [
+      "lambda:ap-southeast-2:shared",
+      "cloudformation:us-east-1:shared",
+    ],
+  );
+});
