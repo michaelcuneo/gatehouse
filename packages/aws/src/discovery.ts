@@ -77,6 +77,15 @@ export interface AwsDiscoveredStack {
   resourceCount: number;
 }
 
+export interface AwsDiscoveryCoverageEntry {
+  service: AwsDiscoveredResource["service"];
+  label: string;
+  region: string;
+  status: "complete" | "warning";
+  discovered: number;
+  message?: string;
+}
+
 export interface AwsStageDiscovery {
   accountId: string;
   scannedAt: string;
@@ -84,6 +93,7 @@ export interface AwsStageDiscovery {
   stacks: AwsDiscoveredStack[];
   resources: AwsDiscoveredResource[];
   warnings: string[];
+  coverage: AwsDiscoveryCoverageEntry[];
 }
 
 type StackOwnershipIndexEntry = AwsDiscoveredOwner & {
@@ -961,6 +971,7 @@ export async function discoverAwsStage(
   const identity = await assertAwsStageAccess(stage);
   const regions = uniqueRegions(stage);
   const warnings: string[] = [];
+  const coverage: AwsDiscoveryCoverageEntry[] = [];
   const stacks: AwsDiscoveredStack[] = [];
   const ownership = new Map<string, StackOwnershipIndexEntry>();
   const stackResources: AwsDiscoveredResource[] = [];
@@ -970,55 +981,98 @@ export async function discoverAwsStage(
       const discoveredStacks = await discoverStacks(stage, region);
       stacks.push(...discoveredStacks.stacks);
       stackResources.push(...discoveredStacks.resources);
+      coverage.push({
+        service: "cloudformation",
+        label: `CloudFormation (${region})`,
+        region,
+        status: "complete",
+        discovered: discoveredStacks.resources.length,
+      });
 
       for (const [physicalId, owner] of discoveredStacks.ownership) {
         ownership.set(physicalId, owner);
       }
     } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : String(cause);
       warnings.push(
-        `CloudFormation discovery failed in ${region}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        `CloudFormation discovery failed in ${region}: ${message}`,
       );
+      coverage.push({
+        service: "cloudformation",
+        label: `CloudFormation (${region})`,
+        region,
+        status: "warning",
+        discovered: 0,
+        message,
+      });
     }
   }
 
   const resources: AwsDiscoveredResource[] = [];
 
   const collect = async (
+    service: AwsDiscoveredResource["service"],
     label: string,
+    region: string,
     operation: () => Promise<AwsDiscoveredResource[]>,
   ) => {
     try {
-      resources.push(...(await operation()));
+      const discoveredResources = await operation();
+      resources.push(...discoveredResources);
+      coverage.push({
+        service,
+        label,
+        region,
+        status: "complete",
+        discovered: discoveredResources.length,
+      });
     } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : String(cause);
       warnings.push(
-        `${label} discovery failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+        `${label} discovery failed: ${message}`,
       );
+      coverage.push({
+        service,
+        label,
+        region,
+        status: "warning",
+        discovered: 0,
+        message,
+      });
     }
   };
 
-  await collect("S3", () => discoverS3(stage, ownership));
-  await collect("Route53", () => discoverRoute53(stage, ownership));
-  await collect("CloudFront", () => discoverCloudFront(stage, ownership));
+  await collect("s3", "S3", "global", () =>
+    discoverS3(stage, ownership),
+  );
+  await collect("route53", "Route53", "global", () =>
+    discoverRoute53(stage, ownership),
+  );
+  await collect("cloudfront", "CloudFront", "global", () =>
+    discoverCloudFront(stage, ownership),
+  );
 
   const acmRegions = [...new Set([...regions, "us-east-1"])];
 
   for (const region of acmRegions) {
-    await collect(`ACM (${region})`, () =>
+    await collect("acm", `ACM (${region})`, region, () =>
       discoverAcm(stage, region, ownership),
     );
   }
 
   for (const region of regions) {
-    await collect(`Lambda (${region})`, () =>
+    await collect("lambda", `Lambda (${region})`, region, () =>
       discoverLambda(stage, region, ownership),
     );
-    await collect(`DynamoDB (${region})`, () =>
+    await collect("dynamodb", `DynamoDB (${region})`, region, () =>
       discoverDynamoDb(stage, region, ownership),
     );
-    await collect(`CloudWatch Logs (${region})`, () =>
+    await collect("logs", `CloudWatch Logs (${region})`, region, () =>
       discoverLogGroups(stage, region, ownership),
     );
-    await collect(`CloudWatch Alarms (${region})`, () =>
+    await collect("cloudwatch", `CloudWatch Alarms (${region})`, region, () =>
       discoverCloudWatchAlarms(
         stage,
         region,
@@ -1047,6 +1101,13 @@ export async function discoverAwsStage(
     a.name.localeCompare(b.name),
   );
 
+  coverage.sort(
+    (a, b) =>
+      a.service.localeCompare(b.service) ||
+      a.region.localeCompare(b.region) ||
+      a.label.localeCompare(b.label),
+  );
+
   return {
     accountId: identity.accountId,
     scannedAt: new Date().toISOString(),
@@ -1054,5 +1115,6 @@ export async function discoverAwsStage(
     stacks,
     resources,
     warnings,
+    coverage,
   };
 }
