@@ -4,6 +4,7 @@ import type { Actions, PageServerLoad } from './$types';
 import {
   applyCloudFormationRetention,
   assessAwsDiscoveryResource,
+  awsStageAdoptionEnabled,
   assertImportableCloudFront,
   assertImportableDynamoDB,
   assertImportableS3,
@@ -642,7 +643,7 @@ function resourceBelongsToStage(
 function adoptionLockError(
   stage: { adoptionMode?: 'read_only' | 'enabled' }
 ) {
-  if ((stage.adoptionMode ?? 'read_only') === 'enabled') {
+  if (awsStageAdoptionEnabled(stage)) {
     return null;
   }
 
