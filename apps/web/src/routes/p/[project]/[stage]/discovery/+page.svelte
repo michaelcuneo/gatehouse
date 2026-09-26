@@ -218,7 +218,23 @@
     </p>
   {:else if form?.action === 'verifyMigration' && form?.success}
     <p class="muted mono">
-      Stack migration verified. GateHouse is ready for the external ownership detach step; AWS ownership is still unchanged.
+      Stack migration verified. GateHouse is ready to apply retention policies; AWS ownership is still unchanged.
+    </p>
+  {:else if form?.action === 'applyRetention' && form?.success}
+    <p class="muted mono">
+      CloudFormation retention-policy update started. Verify retention after the stack update completes.
+    </p>
+  {:else if form?.action === 'verifyRetention' && form?.success}
+    <p class="muted mono">
+      Retention policies verified on every stack resource. The stack can now be detached safely.
+    </p>
+  {:else if form?.action === 'detachStack' && form?.success}
+    <p class="muted mono">
+      CloudFormation stack deletion started with retained resources. Confirm detach after the stack disappears.
+    </p>
+  {:else if form?.action === 'confirmDetach' && form?.success}
+    <p class="muted mono">
+      External stack ownership detached. Retained resources remain observed until explicit GateHouse takeover.
     </p>
   {/if}
 
@@ -309,11 +325,13 @@
               </td>
               <td>
                 {#if migration}
-                  <span class={migration.status === 'ready_for_detach' ? 'status status-ready' : 'status status-pending'}>
+                  <span class={migration.status === 'detached' || migration.status === 'retention_applied' || migration.status === 'ready_for_detach' ? 'status status-ready' : 'status status-pending'}>
                     {migration.status}
                   </span>
                   <div class="muted">
-                    AWS remains {stack.ownerType}-owned
+                    {migration.status === 'detached'
+                      ? 'CloudFormation ownership removed; resources retained'
+                      : 'AWS remains ' + stack.ownerType + '-owned'}
                   </div>
 
                   {#if migration.status === 'prepared'}
@@ -323,18 +341,67 @@
                         Verify migration
                       </button>
                     </form>
-                  {:else}
+                  {:else if migration.status === 'ready_for_detach'}
+                    {#if stack.ownerType === 'cloudformation'}
+                      <form method="POST" action="?/applyRetention">
+                        <input type="hidden" name="stackId" value={stack.id} />
+                        <button class="button" type="submit">
+                          Apply retention policies
+                        </button>
+                      </form>
+                    {:else}
+                      <p class="muted">
+                        Automatic detach is disabled for {stack.ownerType}. Migrate that external owner manually, then refresh discovery.
+                      </p>
+                    {/if}
+                  {:else if migration.status === 'retention_update_pending'}
+                    <form method="POST" action="?/verifyRetention">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="button" type="submit">
+                        Verify retention
+                      </button>
+                    </form>
+                  {:else if migration.status === 'retention_applied'}
                     <p class="muted">
-                      GateHouse found no local readiness blockers. Detach the external stack ownership before promoting child resources.
+                      Every stack resource is configured to be retained. Type the exact stack name to initiate CloudFormation detach.
+                    </p>
+                    <form method="POST" action="?/detachStack">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <div class="field">
+                        <input
+                          name="confirmation"
+                          placeholder={stack.name}
+                          autocomplete="off"
+                        />
+                      </div>
+                      <button class="button" type="submit">
+                        Detach stack ownership
+                      </button>
+                    </form>
+                  {:else if migration.status === 'detach_pending'}
+                    <p class="muted">
+                      CloudFormation deletion is in progress. Resources are configured to be retained.
+                    </p>
+                    <form method="POST" action="?/confirmDetach">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="button" type="submit">
+                        Confirm detach
+                      </button>
+                    </form>
+                  {:else if migration.status === 'detached'}
+                    <p class="muted">
+                      Stack ownership has been removed. Imported children are now observed and can be dry-run individually before takeover.
                     </p>
                   {/if}
 
-                  <form method="POST" action="?/cancelMigration">
-                    <input type="hidden" name="stackId" value={stack.id} />
-                    <button class="pill" type="submit">
-                      Cancel plan
-                    </button>
-                  </form>
+                  {#if migration.status !== 'detach_pending' && migration.status !== 'detached'}
+                    <form method="POST" action="?/cancelMigration">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="pill" type="submit">
+                        Cancel plan
+                      </button>
+                    </form>
+                  {/if}
                 {:else}
                   <form method="POST" action="?/prepareMigration">
                     <input type="hidden" name="stackId" value={stack.id} />
