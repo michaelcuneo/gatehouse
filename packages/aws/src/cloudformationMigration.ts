@@ -88,7 +88,9 @@ function assertPlainTemplate(template: JsonTemplate): Record<string, TemplateRes
   return resources;
 }
 
-function withRetention(template: JsonTemplate): JsonTemplate {
+export function buildRetainedCloudFormationTemplate(
+  template: JsonTemplate,
+): JsonTemplate {
   const resources = assertPlainTemplate(template);
 
   return {
@@ -183,7 +185,7 @@ export async function applyCloudFormationRetention(
       TemplateStage: "Original",
     }),
   );
-  const template = withRetention(
+  const template = buildRetainedCloudFormationTemplate(
     parseJsonTemplate(templateResult.TemplateBody),
   );
 
