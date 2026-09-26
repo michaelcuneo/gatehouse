@@ -1,13 +1,5 @@
-import { reconcileEndpoint } from '$lib/server/nginx/reconcileEndpoint';
+import { reconcileResource as reconcileManagedResource } from '@gatehouse/reconciliation';
 
 export async function reconcileResource(resource: Resource) {
-  switch (resource.kind) {
-    case 'endpoint':
-      return reconcileEndpoint(resource);
-
-    default:
-      throw new Error(
-        `Reconciliation is not implemented for resource kind: ${resource.kind}`
-      );
-  }
+  return reconcileManagedResource(resource.id);
 }

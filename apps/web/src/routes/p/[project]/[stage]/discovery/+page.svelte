@@ -1,0 +1,561 @@
+<script lang="ts">
+  let { data, form } = $props();
+
+  const external = $derived(
+    data.discovery.resources.filter((resource) => resource.ownership === 'external')
+  );
+
+  const observed = $derived(
+    data.discovery.resources.filter((resource) => resource.ownership === 'observed')
+  );
+
+  const adoptionLocked = $derived(
+    (data.stage.adoptionMode ?? 'read_only') !== 'enabled'
+  );
+
+  const supportsImport = (
+    resource: (typeof data.discovery.resources)[number]
+  ) => data.adoption[resource.id]?.importable === true;
+
+  const adoptionFor = (
+    resource: (typeof data.discovery.resources)[number]
+  ) => data.adoption[resource.id];
+
+  const importedFor = (
+    resource: (typeof data.discovery.resources)[number]
+  ) => {
+    const direct = data.imported[resource.id];
+
+    if (direct) {
+      return direct;
+    }
+
+    if (
+      resource.service === 'route53' &&
+      resource.resourceType === 'AWS::Route53::RecordSet' &&
+      resource.details?.alias === true &&
+      resource.details?.type === 'AAAA'
+    ) {
+      const pair = data.discovery.resources.find(
+        (candidate) =>
+          candidate.service === 'route53' &&
+          candidate.resourceType === 'AWS::Route53::RecordSet' &&
+          candidate.name === resource.name &&
+          candidate.details?.zone === resource.details?.zone &&
+          candidate.details?.type === 'A' &&
+          candidate.details?.alias === true &&
+          candidate.details?.aliasDnsName ===
+            resource.details?.aliasDnsName
+      );
+
+      return pair ? data.imported[pair.id] ?? null : null;
+    }
+
+    return null;
+  };
+
+  const dryRunPassedFor = (resourceId: string) =>
+    form?.action === 'dryRun' &&
+    form?.resourceId === resourceId &&
+    form?.safeToAdopt === true;
+
+  const childrenForStack = (stackId: string) =>
+    data.discovery.resources.filter(
+      (resource) => resource.owner?.id === stackId
+    );
+
+  const importedChildrenForStack = (stackId: string) =>
+    childrenForStack(stackId).filter(
+      (resource) => Boolean(importedFor(resource))
+    ).length;
+
+  const stackMigrationFor = (stackId: string) =>
+    data.stackMigrations[stackId] ?? null;
+
+  const migrationBlockers = $derived(
+    form &&
+    'blockers' in form &&
+    Array.isArray(form.blockers)
+      ? form.blockers
+      : []
+  );
+</script>
+
+<main class="container">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">{data.project.name} / {data.stage.name}</span>
+      <h1>AWS discovery</h1>
+      <p class="muted">
+        Inventory is read-only until you explicitly import a resource and then promote it to GateHouse ownership.
+      </p>
+    </div>
+
+    <div class="stage-row">
+      <form method="POST" action="?/refresh">
+        <button class="pill" type="submit">Refresh inventory</button>
+      </form>
+
+      <a
+        class="pill"
+        href={'/p/' + data.project.slug + '/' + data.stage.name + '/discovery/report'}
+      >
+        Export discovery report
+      </a>
+
+      <a class="pill" href={'/p/' + data.project.slug + '/' + data.stage.name}>
+        Back to stage
+      </a>
+    </div>
+  </div>
+
+  {#if adoptionLocked}
+    <section class="panel">
+      <span class="eyebrow">Read-only dogfood mode</span>
+      <h2>AWS mutation lock active</h2>
+      <p class="muted">
+        Discovery, reports, health comparison and safe verification remain available.
+        Imports, ownership changes, stack-migration progression and AWS adoption mutations are blocked
+        until this stage is explicitly unlocked in Stage settings.
+      </p>
+    </section>
+  {/if}
+
+  <section class="panel">
+    <span class="eyebrow">Adoption coverage</span>
+    <h2>AWS estate readiness</h2>
+    <div class="metric-grid dashboard-metrics">
+      <article class="metric">
+        <strong>{data.adoptionSummary.total}</strong>
+        <span class="muted">Discovered</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.importable}</strong>
+        <span class="muted">Importable</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.paired}</strong>
+        <span class="muted">Paired resources</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.inventoryOnly}</strong>
+        <span class="muted">Inventory only</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.external}</strong>
+        <span class="muted">Externally owned</span>
+      </article>
+      <article class="metric">
+        <strong>{data.adoptionSummary.observed}</strong>
+        <span class="muted">Observed</span>
+      </article>
+    </div>
+  </section>
+
+  {#if data.adoptionGaps.length}
+    <section class="panel table-panel">
+      <span class="eyebrow">Coverage gaps</span>
+      <h2>Inventory-only resource shapes</h2>
+      <p class="muted">
+        These resources are visible to GateHouse but deliberately cannot be imported yet.
+      </p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Count</th>
+            <th>Service</th>
+            <th>AWS resource type</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.adoptionGaps as gap}
+            <tr>
+              <td><strong>{gap.count}</strong></td>
+              <td>{gap.service}</td>
+              <td class="mono">{gap.resourceType}</td>
+              <td>{gap.reason}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/if}
+
+  <p class="muted mono">
+    Last scanned {new Date(data.discovery.scannedAt).toLocaleString()}
+  </p>
+
+  {#if form?.error}
+    <p class="error mono">{form.error}</p>
+  {:else if form?.action === 'import' && form?.success}
+    <p class="muted mono">
+      Resource imported into GateHouse as read-only local desired state.
+    </p>
+  {:else if form?.action === 'dryRun' && form?.success}
+    <p class={form.safeToAdopt ? 'muted mono' : 'error mono'}>
+      {form.safeToAdopt
+        ? 'Dry run passed: live AWS state matches the imported GateHouse model.'
+        : 'Dry run did not match: GateHouse will not take control.'}
+    </p>
+  {:else if form?.action === 'takeControl' && form?.success}
+    <p class="muted mono">
+      GateHouse ownership enabled and reconciliation verified.
+    </p>
+  {:else if form?.action === 'prepareMigration' && form?.success}
+    <p class="muted mono">
+      Stack migration prepared locally. AWS ownership is unchanged.
+    </p>
+  {:else if form?.action === 'cancelMigration' && form?.success}
+    <p class="muted mono">
+      Stack migration plan removed. AWS ownership is unchanged.
+    </p>
+  {:else if form?.action === 'verifyMigration' && form?.success}
+    <p class="muted mono">
+      Stack migration verified. GateHouse is ready to apply retention policies; AWS ownership is still unchanged.
+    </p>
+  {:else if form?.action === 'applyRetention' && form?.success}
+    <p class="muted mono">
+      CloudFormation retention-policy update started. Verify retention after the stack update completes.
+    </p>
+  {:else if form?.action === 'verifyRetention' && form?.success}
+    <p class="muted mono">
+      Retention policies verified on every stack resource. The stack can now be detached safely.
+    </p>
+  {:else if form?.action === 'detachStack' && form?.success}
+    <p class="muted mono">
+      CloudFormation stack deletion started with retained resources. Confirm detach after the stack disappears.
+    </p>
+  {:else if form?.action === 'confirmDetach' && form?.success}
+    <p class="muted mono">
+      External stack ownership detached. Retained resources remain observed until explicit GateHouse takeover.
+    </p>
+  {/if}
+
+  {#if form?.action === 'verifyMigration' && migrationBlockers.length}
+    <section class="panel">
+      <span class="eyebrow">Migration blockers</span>
+      <h2>Stack is not ready to detach</h2>
+      {#each migrationBlockers as blocker}
+        <p class="error mono">{blocker}</p>
+      {/each}
+    </section>
+  {/if}
+
+  <div class="metric-grid dashboard-metrics">
+    <article class="panel metric">
+      <span class="eyebrow">Resources</span>
+      <strong>{data.discovery.resources.length}</strong>
+      <span class="muted">discovered</span>
+    </article>
+
+    <article class="panel metric">
+      <span class="eyebrow">External ownership</span>
+      <strong>{external.length}</strong>
+      <span class="muted">CloudFormation / SST / CDK</span>
+    </article>
+
+    <article class="panel metric">
+      <span class="eyebrow">Observed</span>
+      <strong>{observed.length}</strong>
+      <span class="muted">not linked to a stack</span>
+    </article>
+
+    <article class="panel metric">
+      <span class="eyebrow">Stacks</span>
+      <strong>{data.discovery.stacks.length}</strong>
+      <span class="muted">detected owners</span>
+    </article>
+  </div>
+
+  {#if data.discovery.warnings.length}
+    <section class="panel">
+      <span class="eyebrow">Discovery warnings</span>
+      <h2>Partial inventory</h2>
+      {#each data.discovery.warnings as warning}
+        <p class="error mono">{warning}</p>
+      {/each}
+    </section>
+  {/if}
+
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Ownership map</span>
+      <h2>CloudFormation stacks</h2>
+    </div>
+  </div>
+
+  <section class="panel table-panel">
+    {#if data.discovery.stacks.length}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Stack</th>
+            <th>Owner</th>
+            <th>Region</th>
+            <th>Status</th>
+            <th>Resources</th>
+            <th>Migration</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.discovery.stacks as stack}
+            {@const migration = stackMigrationFor(stack.id)}
+            {@const childCount = childrenForStack(stack.id).length}
+            {@const importedCount = importedChildrenForStack(stack.id)}
+            <tr>
+              <td>
+                <strong>{stack.name}</strong>
+                <div class="muted mono">{stack.id}</div>
+              </td>
+              <td>{stack.ownerType}</td>
+              <td>{stack.region}</td>
+              <td class="mono">{stack.status}</td>
+              <td>
+                {childCount} discovered
+                {#if importedCount}
+                  <div class="muted">{importedCount} imported locally</div>
+                {/if}
+              </td>
+              <td>
+                {#if migration}
+                  <span class={migration.status === 'detached' || migration.status === 'retention_applied' || migration.status === 'ready_for_detach' ? 'status status-ready' : 'status status-pending'}>
+                    {migration.status}
+                  </span>
+                  <div class="muted">
+                    {migration.status === 'detached'
+                      ? 'CloudFormation ownership removed; resources retained'
+                      : 'AWS remains ' + stack.ownerType + '-owned'}
+                  </div>
+
+                  {#if migration.status === 'prepared'}
+                    {#if adoptionLocked}
+                      <p class="muted">Read-only mode blocks migration progression.</p>
+                    {:else}
+                    <form method="POST" action="?/verifyMigration">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="button" type="submit">
+                        Verify migration
+                      </button>
+                    </form>
+                    {/if}
+                  {:else if migration.status === 'ready_for_detach'}
+                    {#if adoptionLocked}
+                      <p class="muted">Read-only mode blocks retention changes.</p>
+                    {:else if stack.ownerType === 'cloudformation'}
+                      <form method="POST" action="?/applyRetention">
+                        <input type="hidden" name="stackId" value={stack.id} />
+                        <button class="button" type="submit">
+                          Apply retention policies
+                        </button>
+                      </form>
+                    {:else}
+                      <p class="muted">
+                        Automatic detach is disabled for {stack.ownerType}. Migrate that external owner manually, then refresh discovery.
+                      </p>
+                    {/if}
+                  {:else if migration.status === 'retention_update_pending'}
+                    <form method="POST" action="?/verifyRetention">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="button" type="submit">
+                        Verify retention
+                      </button>
+                    </form>
+                  {:else if migration.status === 'retention_applied'}
+                    <p class="muted">
+                      Every stack resource is configured to be retained.
+                    </p>
+                    {#if adoptionLocked}
+                      <p class="muted">Read-only mode blocks stack detach initiation.</p>
+                    {:else}
+                      <p class="muted">Type the exact stack name to initiate CloudFormation detach.</p>
+                    <form method="POST" action="?/detachStack">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <div class="field">
+                        <input
+                          name="confirmation"
+                          placeholder={stack.name}
+                          autocomplete="off"
+                        />
+                      </div>
+                      <button class="button" type="submit">
+                        Detach stack ownership
+                      </button>
+                    </form>
+                    {/if}
+                  {:else if migration.status === 'detach_pending'}
+                    <p class="muted">
+                      CloudFormation deletion is in progress. Resources are configured to be retained.
+                    </p>
+                    <form method="POST" action="?/confirmDetach">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="button" type="submit">
+                        Confirm detach
+                      </button>
+                    </form>
+                  {:else if migration.status === 'detached'}
+                    <p class="muted">
+                      Stack ownership has been removed. Imported children are now observed and can be dry-run individually before takeover.
+                    </p>
+                  {/if}
+
+                  {#if migration.status !== 'detach_pending' && migration.status !== 'detached'}
+                    <form method="POST" action="?/cancelMigration">
+                      <input type="hidden" name="stackId" value={stack.id} />
+                      <button class="pill" type="submit">
+                        Cancel plan
+                      </button>
+                    </form>
+                  {/if}
+                {:else}
+                  {#if adoptionLocked}
+                    <span class="muted">Read-only mode</span>
+                  {:else}
+                  <form method="POST" action="?/prepareMigration">
+                    <input type="hidden" name="stackId" value={stack.id} />
+                    <button class="pill" type="submit">
+                      Prepare migration
+                    </button>
+                  </form>
+                  {/if}
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <div class="empty-state">
+        <h3>No CloudFormation stacks discovered</h3>
+      </div>
+    {/if}
+  </section>
+
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Estate inventory</span>
+      <h2>Review and adopt</h2>
+    </div>
+  </div>
+
+  <section class="panel table-panel">
+    {#if data.discovery.resources.length}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Resource</th>
+            <th>Service</th>
+            <th>Region</th>
+            <th>AWS ownership</th>
+            <th>GateHouse</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.discovery.resources as resource}
+            {@const imported = importedFor(resource)}
+            {@const assessment = adoptionFor(resource)}
+            <tr>
+              <td>
+                <strong>{resource.name}</strong>
+                {#if assessment?.reason}
+                  <div class="muted">{assessment.reason}</div>
+                {/if}
+                {#if assessment?.requires?.length}
+                  <div class="muted">
+                    Requires: {assessment.requires.join(' · ')}
+                  </div>
+                {/if}
+                <div class="muted mono">{resource.resourceType}</div>
+              </td>
+
+              <td>{resource.service}</td>
+              <td>{resource.region}</td>
+
+              <td>
+                <span class={resource.ownership === 'external' ? 'status status-pending' : 'status status-ready'}>
+                  {resource.ownership}
+                </span>
+
+                {#if resource.owner}
+                  <div class="muted">
+                    {resource.owner.type}: {resource.owner.name}
+                  </div>
+                  {#if resource.owner.logicalId}
+                    <div class="muted mono">{resource.owner.logicalId}</div>
+                  {/if}
+                {/if}
+              </td>
+
+              <td>
+                {#if imported}
+                  <a href={'/infrastructure/resources/' + imported.id}>
+                    <span class={imported.ownership === 'gatehouse' ? 'status status-ready' : 'status status-pending'}>
+                      {imported.ownership}
+                    </span>
+                  </a>
+
+                  {#if imported.healthy === true}
+                    <div class="muted">live state matches</div>
+                  {:else if imported.healthy === false}
+                    <div class="error">live state differs</div>
+                  {/if}
+                {:else}
+                  <span class="muted">Not imported</span>
+                {/if}
+              </td>
+
+              <td>
+                {#if !imported}
+                  {#if supportsImport(resource)}
+                    {#if adoptionLocked}
+                      <span class="muted">Import blocked by read-only mode</span>
+                    {:else}
+                    <form method="POST" action="?/import">
+                      <input type="hidden" name="discoveryId" value={resource.id} />
+                      <button class="pill" type="submit">
+                        Import read-only
+                      </button>
+                    </form>
+                    {/if}
+                  {:else}
+                    <span class="muted">Inventory only</span>
+                  {/if}
+                {:else if imported.ownership === 'external'}
+                  <span class="muted">
+                    Stack ownership must be transferred first
+                  </span>
+                {:else if imported.ownership === 'gatehouse'}
+                  <span class="muted">GateHouse controlled</span>
+                {:else}
+                  <div class="stage-row">
+                    <form method="POST" action="?/dryRun">
+                      <input type="hidden" name="resourceId" value={imported.id} />
+                      <button class="pill" type="submit">
+                        Dry run
+                      </button>
+                    </form>
+
+                    {#if dryRunPassedFor(imported.id) && !adoptionLocked}
+                      <form method="POST" action="?/takeControl">
+                        <input type="hidden" name="resourceId" value={imported.id} />
+                        <button class="button" type="submit">
+                          Take control
+                        </button>
+                      </form>
+                    {/if}
+                  </div>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <div class="empty-state">
+        <h3>No AWS resources discovered</h3>
+      </div>
+    {/if}
+  </section>
+</main>

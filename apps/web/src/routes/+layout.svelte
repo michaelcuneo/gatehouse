@@ -32,7 +32,9 @@
         { label: 'Static Sites', href: '/infrastructure/static-sites' },
         { label: 'DNS', href: '/infrastructure/dns' },
         { label: 'Certificates', href: '/infrastructure/certificates' },
-        { label: 'Storage', href: '/infrastructure/storage' }
+        { label: 'Storage', href: '/infrastructure/storage' },
+        { label: 'DynamoDB', href: '/infrastructure/dynamodb' },
+        { label: 'Functions', href: '/infrastructure/functions' }
       ]
     },
     {
@@ -40,7 +42,8 @@
       items: [
         { label: 'Reconciliation', href: '/runtime/reconciliation' },
         { label: 'Providers', href: '/runtime/providers' },
-        { label: 'Generated Config', href: '/runtime/generated' }
+        { label: 'Generated Config', href: '/runtime/generated' },
+        { label: 'Backup', href: '/runtime/backup' }
       ]
     },
     {

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_file="${1:-}"
+filename="${2:-}"
+
+if [[ -z "$source_file" || -z "$filename" ]]; then
+  echo "usage: route-manager-apply <source.conf> <filename.conf>" >&2
+  exit 64
+fi
+
+if [[ "$filename" == */* || "$filename" != *.conf ]]; then
+  echo "invalid nginx config filename: $filename" >&2
+  exit 64
+fi
+
+if [[ ! -f "$source_file" ]]; then
+  echo "generated nginx config does not exist: $source_file" >&2
+  exit 66
+fi
+
+target_dir="/etc/nginx/conf.d"
+target="$target_dir/$filename"
+backup=""
+
+install -d -m 0755 "$target_dir"
+
+if [[ -e "$target" ]]; then
+  backup="$(mktemp)"
+  cp -a "$target" "$backup"
+fi
+
+install -m 0644 "$source_file" "$target"
+
+if ! nginx -t; then
+  if [[ -n "$backup" ]]; then
+    cp -a "$backup" "$target"
+  else
+    rm -f "$target"
+  fi
+
+  rm -f "$backup"
+  echo "nginx validation failed; previous config restored" >&2
+  exit 1
+fi
+
+rm -f "$backup"
+systemctl reload nginx

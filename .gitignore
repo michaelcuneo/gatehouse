@@ -1,12 +1,27 @@
 node_modules
+**/node_modules
+
+.turbo
+**/.turbo
+
+# SvelteKit generated
+.svelte-kit
+**/.svelte-kit
+
+# Runtime data
+**/data/*.db
+**/data/*.db-*
+runtime/
+**/runtime/generated/
 
 # Output
 .output
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
 /build
+**/build
+**/dist
 
 # OS
 .DS_Store

@@ -1,0 +1,639 @@
+import {
+  CreateDistributionCommand,
+  CreateInvalidationCommand,
+  CreateOriginAccessControlCommand,
+  GetDistributionCommand,
+  GetDistributionConfigCommand,
+  ListDistributionsCommand,
+  ListOriginAccessControlsCommand,
+  UpdateDistributionCommand,
+} from "@aws-sdk/client-cloudfront";
+
+import type { ManagedStage } from "@gatehouse/core";
+
+import { awsClientsForStage } from "./clients";
+
+export interface CloudFrontStaticSiteSpec {
+  resourceId: string;
+  bucket: string;
+  bucketRegion: string;
+  prefix?: string;
+  distributionId?: string;
+  originId?: string;
+  manageOrigin?: boolean;
+  defaultRootObject?: string;
+  aliases?: string[];
+  certificateArn?: string;
+}
+
+export interface CloudFrontDistributionState {
+  id: string;
+  domainName?: string;
+  status?: string;
+  enabled: boolean;
+  defaultRootObject?: string;
+  aliases: string[];
+  certificateArn?: string;
+  originId?: string;
+  originDomainName?: string;
+  originPath?: string;
+}
+
+function callerReference(resourceId: string): string {
+  return `gatehouse-static-site-${resourceId}`;
+}
+
+function originId(resourceId: string): string {
+  return `gatehouse-s3-${resourceId}`;
+}
+
+function originAccessControlName(resourceId: string): string {
+  return `gatehouse-${resourceId}`.slice(0, 64);
+}
+
+async function findOriginAccessControl(
+  stage: ManagedStage,
+  resourceId: string,
+): Promise<string | null> {
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+  let marker: string | undefined;
+
+  do {
+    const result = await cloudFront.send(
+      new ListOriginAccessControlsCommand({
+        Marker: marker,
+      }),
+    );
+
+    const match = result.OriginAccessControlList?.Items?.find(
+      (item) => item.Name === originAccessControlName(resourceId),
+    );
+
+    if (match?.Id) {
+      return match.Id;
+    }
+
+    marker = result.OriginAccessControlList?.IsTruncated
+      ? result.OriginAccessControlList.NextMarker
+      : undefined;
+  } while (marker);
+
+  return null;
+}
+
+async function ensureOriginAccessControl(
+  stage: ManagedStage,
+  resourceId: string,
+): Promise<string> {
+  const existing = await findOriginAccessControl(stage, resourceId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+
+  const result = await cloudFront.send(
+    new CreateOriginAccessControlCommand({
+      OriginAccessControlConfig: {
+        Name: originAccessControlName(resourceId),
+        Description: `GateHouse static site ${resourceId}`,
+        OriginAccessControlOriginType: "s3",
+        SigningBehavior: "always",
+        SigningProtocol: "sigv4",
+      },
+    }),
+  );
+
+  const id = result.OriginAccessControl?.Id;
+
+  if (!id) {
+    throw new Error("CloudFront did not return an origin access control id");
+  }
+
+  return id;
+}
+
+function s3OriginDomain(bucket: string, region: string): string {
+  return region === "us-east-1"
+    ? `${bucket}.s3.amazonaws.com`
+    : `${bucket}.s3.${region}.amazonaws.com`;
+}
+
+function originPath(prefix?: string): string {
+  if (!prefix?.trim()) return "";
+
+  const cleaned = prefix.trim().replace(/^\/+|\/+$/g, "");
+  return cleaned ? `/${cleaned}` : "";
+}
+
+function normalizedAliases(aliases?: string[]): string[] {
+  return [...new Set(
+    (aliases ?? [])
+      .map((alias) => alias.trim().toLowerCase())
+      .filter(Boolean),
+  )].sort();
+}
+
+function desiredViewerCertificate(spec: CloudFrontStaticSiteSpec) {
+  const aliases = normalizedAliases(spec.aliases);
+
+  if (!aliases.length) {
+    return {
+      CloudFrontDefaultCertificate: true,
+    };
+  }
+
+  if (!spec.certificateArn) {
+    throw new Error(
+      "CloudFront aliases require an ACM certificate ARN",
+    );
+  }
+
+  return {
+    ACMCertificateArn: spec.certificateArn,
+    SSLSupportMethod: "sni-only" as const,
+    MinimumProtocolVersion: "TLSv1.2_2021" as const,
+  };
+}
+
+function desiredAliases(spec: CloudFrontStaticSiteSpec) {
+  const aliases = normalizedAliases(spec.aliases);
+
+  return {
+    Quantity: aliases.length,
+    Items: aliases.length ? aliases : undefined,
+  };
+}
+
+export async function findGateHouseDistribution(
+  stage: ManagedStage,
+  spec: CloudFrontStaticSiteSpec,
+): Promise<CloudFrontDistributionState | null> {
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+
+  if (spec.distributionId) {
+    try {
+      const result = await cloudFront.send(
+        new GetDistributionCommand({
+          Id: spec.distributionId,
+        }),
+      );
+
+      return result.Distribution
+        ? {
+            id: result.Distribution.Id ?? spec.distributionId,
+            domainName: result.Distribution.DomainName,
+            status: result.Distribution.Status,
+            enabled:
+              result.Distribution.DistributionConfig?.Enabled ?? false,
+            defaultRootObject:
+              result.Distribution.DistributionConfig?.DefaultRootObject,
+            aliases:
+              result.Distribution.DistributionConfig?.Aliases?.Items ?? [],
+            certificateArn:
+              result.Distribution.DistributionConfig?.ViewerCertificate?.ACMCertificateArn,
+            originId:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.Id,
+            originDomainName:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.DomainName,
+            originPath:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.OriginPath,
+          }
+        : null;
+    } catch (cause) {
+      const name =
+        cause && typeof cause === "object" && "name" in cause
+          ? String((cause as { name?: unknown }).name)
+          : "";
+
+      if (name === "NoSuchDistribution") {
+        return null;
+      }
+
+      throw cause;
+    }
+  }
+
+  let marker: string | undefined;
+
+  do {
+    const result = await cloudFront.send(
+      new ListDistributionsCommand({
+        Marker: marker,
+      }),
+    );
+
+    const match = result.DistributionList?.Items?.find(
+      (distribution) =>
+        distribution.Comment ===
+        `Managed by GateHouse static site ${spec.resourceId}`,
+    );
+
+    if (match?.Id) {
+      return {
+        id: match.Id,
+        domainName: match.DomainName,
+        status: match.Status,
+        enabled: match.Enabled ?? false,
+        aliases: match.Aliases?.Items ?? [],
+        certificateArn: match.ViewerCertificate?.ACMCertificateArn,
+        originId: match.Origins?.Items?.[0]?.Id,
+        originDomainName: match.Origins?.Items?.[0]?.DomainName,
+        originPath: match.Origins?.Items?.[0]?.OriginPath,
+      };
+    }
+
+    marker = result.DistributionList?.IsTruncated
+      ? result.DistributionList.NextMarker
+      : undefined;
+  } while (marker);
+
+  return null;
+}
+
+export async function ensureGateHouseDistribution(
+  stage: ManagedStage,
+  spec: CloudFrontStaticSiteSpec,
+): Promise<CloudFrontDistributionState> {
+  const existing = await findGateHouseDistribution(stage, spec);
+
+  if (existing) {
+    const cloudFront = awsClientsForStage(stage).cloudFront;
+
+    if (spec.distributionId) {
+      const current = await cloudFront.send(
+        new GetDistributionConfigCommand({
+          Id: existing.id,
+        }),
+      );
+
+      if (!current.DistributionConfig || !current.ETag) {
+        throw new Error(
+          `CloudFront distribution "${existing.id}" has no editable configuration`,
+        );
+      }
+
+      const nextConfig = {
+        ...current.DistributionConfig,
+        Enabled: true,
+        DefaultRootObject:
+          spec.defaultRootObject ??
+          current.DistributionConfig.DefaultRootObject,
+        Aliases: desiredAliases(spec),
+        ViewerCertificate: desiredViewerCertificate(spec),
+      };
+
+      const updated = await cloudFront.send(
+        new UpdateDistributionCommand({
+          Id: existing.id,
+          IfMatch: current.ETag,
+          DistributionConfig: nextConfig,
+        }),
+      );
+
+      const config = updated.Distribution?.DistributionConfig;
+
+      return {
+        id: existing.id,
+        domainName:
+          updated.Distribution?.DomainName ?? existing.domainName,
+        status: updated.Distribution?.Status ?? existing.status,
+        enabled: config?.Enabled ?? true,
+        defaultRootObject: config?.DefaultRootObject,
+        aliases: config?.Aliases?.Items ?? [],
+        certificateArn:
+          config?.ViewerCertificate?.ACMCertificateArn,
+        originId: config?.Origins?.Items?.[0]?.Id,
+        originDomainName:
+          config?.Origins?.Items?.[0]?.DomainName,
+        originPath: config?.Origins?.Items?.[0]?.OriginPath,
+      };
+    }
+    const current = await cloudFront.send(
+      new GetDistributionConfigCommand({
+        Id: existing.id,
+      }),
+    );
+
+    if (!current.DistributionConfig || !current.ETag) {
+      throw new Error(
+        `CloudFront distribution "${existing.id}" has no editable configuration`,
+      );
+    }
+
+    const currentOrigins = current.DistributionConfig.Origins;
+
+    if (!currentOrigins) {
+      throw new Error(
+        `CloudFront distribution "${existing.id}" has no origins`,
+      );
+    }
+
+    const originAccessControlId = await ensureOriginAccessControl(
+      stage,
+      spec.resourceId,
+    );
+
+    const origins = currentOrigins.Items?.map((origin) =>
+      origin.Id === originId(spec.resourceId)
+        ? {
+            ...origin,
+            DomainName: s3OriginDomain(
+              spec.bucket,
+              spec.bucketRegion,
+            ),
+            OriginPath: originPath(spec.prefix),
+            OriginAccessControlId: originAccessControlId,
+            S3OriginConfig: {
+              OriginAccessIdentity: "",
+            },
+          }
+        : origin,
+    );
+
+    const nextConfig = {
+      ...current.DistributionConfig,
+      Enabled: true,
+      DefaultRootObject: spec.defaultRootObject ?? "index.html",
+      Aliases: desiredAliases(spec),
+      ViewerCertificate: desiredViewerCertificate(spec),
+      Origins: {
+        Quantity: currentOrigins.Quantity,
+        Items: origins,
+      },
+    };
+
+    const updated = await cloudFront.send(
+      new UpdateDistributionCommand({
+        Id: existing.id,
+        IfMatch: current.ETag,
+        DistributionConfig: nextConfig,
+      }),
+    );
+
+    const updatedConfig = updated.Distribution?.DistributionConfig;
+
+    return {
+      id: existing.id,
+      domainName: updated.Distribution?.DomainName ?? existing.domainName,
+      status: updated.Distribution?.Status ?? existing.status,
+      enabled: updatedConfig?.Enabled ?? true,
+      defaultRootObject: updatedConfig?.DefaultRootObject,
+      aliases: updatedConfig?.Aliases?.Items ?? [],
+      certificateArn:
+        updatedConfig?.ViewerCertificate?.ACMCertificateArn,
+      originId: updatedConfig?.Origins?.Items?.[0]?.Id,
+      originDomainName:
+        updatedConfig?.Origins?.Items?.[0]?.DomainName,
+      originPath:
+        updatedConfig?.Origins?.Items?.[0]?.OriginPath,
+    };
+  }
+
+  if (spec.distributionId) {
+    throw new Error(
+      `CloudFront distribution "${spec.distributionId}" does not exist`,
+    );
+  }
+
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+  const originAccessControlId = await ensureOriginAccessControl(
+    stage,
+    spec.resourceId,
+  );
+
+  const result = await cloudFront.send(
+    new CreateDistributionCommand({
+      DistributionConfig: {
+        CallerReference: callerReference(spec.resourceId),
+        Comment: `Managed by GateHouse static site ${spec.resourceId}`,
+        Enabled: true,
+        DefaultRootObject: spec.defaultRootObject ?? "index.html",
+        Origins: {
+          Quantity: 1,
+          Items: [
+            {
+              Id: originId(spec.resourceId),
+              DomainName: s3OriginDomain(
+                spec.bucket,
+                spec.bucketRegion,
+              ),
+              OriginPath: originPath(spec.prefix),
+              OriginAccessControlId: originAccessControlId,
+              S3OriginConfig: {
+                OriginAccessIdentity: "",
+              },
+            },
+          ],
+        },
+        DefaultCacheBehavior: {
+          TargetOriginId: originId(spec.resourceId),
+          ViewerProtocolPolicy: "redirect-to-https",
+          Compress: true,
+          AllowedMethods: {
+            Quantity: 2,
+            Items: ["GET", "HEAD"],
+            CachedMethods: {
+              Quantity: 2,
+              Items: ["GET", "HEAD"],
+            },
+          },
+          ForwardedValues: {
+            QueryString: false,
+            Cookies: {
+              Forward: "none",
+            },
+          },
+          MinTTL: 0,
+          DefaultTTL: 3600,
+          MaxTTL: 31536000,
+        },
+        PriceClass: "PriceClass_100",
+        Aliases: desiredAliases(spec),
+        ViewerCertificate: desiredViewerCertificate(spec),
+        HttpVersion: "http2",
+        IsIPV6Enabled: true,
+        Restrictions: {
+          GeoRestriction: {
+            RestrictionType: "none",
+            Quantity: 0,
+          },
+        },
+      },
+    }),
+  );
+
+  const distribution = result.Distribution;
+
+  if (!distribution?.Id) {
+    throw new Error("CloudFront did not return a distribution id");
+  }
+
+  return {
+    id: distribution.Id,
+    domainName: distribution.DomainName,
+    status: distribution.Status,
+    enabled: distribution.DistributionConfig?.Enabled ?? true,
+    defaultRootObject:
+      distribution.DistributionConfig?.DefaultRootObject,
+    aliases:
+      distribution.DistributionConfig?.Aliases?.Items ?? [],
+    certificateArn:
+      distribution.DistributionConfig?.ViewerCertificate?.ACMCertificateArn,
+    originId:
+      distribution.DistributionConfig?.Origins?.Items?.[0]?.Id,
+    originDomainName:
+      distribution.DistributionConfig?.Origins?.Items?.[0]?.DomainName,
+    originPath:
+      distribution.DistributionConfig?.Origins?.Items?.[0]?.OriginPath,
+  };
+}
+
+export async function invalidateCloudFrontDistribution(
+  stage: ManagedStage,
+  distributionId: string,
+  resourceId: string,
+): Promise<void> {
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+
+  await cloudFront.send(
+    new CreateInvalidationCommand({
+      DistributionId: distributionId,
+      InvalidationBatch: {
+        CallerReference: `${resourceId}-${Date.now()}`,
+        Paths: {
+          Quantity: 1,
+          Items: ["/*"],
+        },
+      },
+    }),
+  );
+}
+
+export async function disableGateHouseDistribution(
+  stage: ManagedStage,
+  spec: CloudFrontStaticSiteSpec,
+): Promise<void> {
+  if (spec.distributionId) {
+    return;
+  }
+
+  const existing = await findGateHouseDistribution(stage, spec);
+
+  if (!existing || !existing.enabled) {
+    return;
+  }
+
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+  const current = await cloudFront.send(
+    new GetDistributionConfigCommand({
+      Id: existing.id,
+    }),
+  );
+
+  if (!current.DistributionConfig || !current.ETag) {
+    throw new Error(
+      `CloudFront distribution "${existing.id}" has no editable configuration`,
+    );
+  }
+
+  await cloudFront.send(
+    new UpdateDistributionCommand({
+      Id: existing.id,
+      IfMatch: current.ETag,
+      DistributionConfig: {
+        ...current.DistributionConfig,
+        Enabled: false,
+      },
+    }),
+  );
+}
+
+
+export async function findGateHouseDistributionByResource(
+  stage: ManagedStage,
+  resourceId: string,
+  distributionId?: string,
+): Promise<CloudFrontDistributionState | null> {
+  const cloudFront = awsClientsForStage(stage).cloudFront;
+
+  if (distributionId) {
+    try {
+      const result = await cloudFront.send(
+        new GetDistributionCommand({
+          Id: distributionId,
+        }),
+      );
+
+      return result.Distribution
+        ? {
+            id: result.Distribution.Id ?? distributionId,
+            domainName: result.Distribution.DomainName,
+            status: result.Distribution.Status,
+            enabled:
+              result.Distribution.DistributionConfig?.Enabled ?? false,
+            defaultRootObject:
+              result.Distribution.DistributionConfig?.DefaultRootObject,
+            aliases:
+              result.Distribution.DistributionConfig?.Aliases?.Items ?? [],
+            certificateArn:
+              result.Distribution.DistributionConfig?.ViewerCertificate?.ACMCertificateArn,
+            originId:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.Id,
+            originDomainName:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.DomainName,
+            originPath:
+              result.Distribution.DistributionConfig?.Origins?.Items?.[0]?.OriginPath,
+          }
+        : null;
+    } catch (cause) {
+      const name =
+        cause && typeof cause === "object" && "name" in cause
+          ? String((cause as { name?: unknown }).name)
+          : "";
+
+      if (name === "NoSuchDistribution") {
+        return null;
+      }
+
+      throw cause;
+    }
+  }
+
+  let marker: string | undefined;
+
+  do {
+    const result = await cloudFront.send(
+      new ListDistributionsCommand({
+        Marker: marker,
+      }),
+    );
+
+    const match = result.DistributionList?.Items?.find(
+      (distribution) =>
+        distribution.Comment ===
+        `Managed by GateHouse static site ${resourceId}`,
+    );
+
+    if (match?.Id) {
+      return {
+        id: match.Id,
+        domainName: match.DomainName,
+        status: match.Status,
+        enabled: match.Enabled ?? false,
+        aliases: match.Aliases?.Items ?? [],
+        certificateArn: match.ViewerCertificate?.ACMCertificateArn,
+        originId: match.Origins?.Items?.[0]?.Id,
+        originDomainName: match.Origins?.Items?.[0]?.DomainName,
+        originPath: match.Origins?.Items?.[0]?.OriginPath,
+      };
+    }
+
+    marker = result.DistributionList?.IsTruncated
+      ? result.DistributionList.NextMarker
+      : undefined;
+  } while (marker);
+
+  return null;
+}

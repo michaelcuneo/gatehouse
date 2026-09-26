@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+filename="${2:-${1:-}}"
+
+if [[ -z "$filename" || "$filename" == */* || "$filename" != *.conf ]]; then
+  echo "usage: route-manager-remove [generated-path] <filename.conf>" >&2
+  exit 64
+fi
+
+target="/etc/nginx/conf.d/$filename"
+backup=""
+
+if [[ -e "$target" ]]; then
+  backup="$(mktemp)"
+  cp -a "$target" "$backup"
+  rm -f "$target"
+fi
+
+if ! nginx -t; then
+  if [[ -n "$backup" ]]; then
+    cp -a "$backup" "$target"
+  fi
+
+  rm -f "$backup"
+  echo "nginx validation failed; config restored" >&2
+  exit 1
+fi
+
+rm -f "$backup"
+systemctl reload nginx

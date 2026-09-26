@@ -1,584 +1,372 @@
-# gatehouse
+# GateHouse
 
-# Gatehouse
+GateHouse is a self-hosted, local-first infrastructure runtime and AWS orchestration platform.
 
-Infrastructure Runtime + AWS Orchestration Platform
+It stores desired infrastructure state locally, discovers existing AWS infrastructure, reconciles supported resources through providers, monitors health, records deployments and audit history, and provides explicit ownership/adoption workflows for infrastructure that already exists.
 
----
+GateHouse is not Kubernetes, a distributed control plane, or a service mesh. It is intentionally small, deterministic, and designed to run close to the systems it manages.
 
-# Overview
+## Status
 
-Gatehouse is a self-hosted infrastructure orchestration platform built with:
+GateHouse is currently **pre-release / dogfood-ready**.
 
-- SvelteKit
-- TypeScript
-- SQLite initially
-- AWS SDK v3
-- NGINX
-- Local runtime orchestration
+The core control plane is implemented. Existing AWS estates can be discovered and imported read-only, supported resources can be dry-run before adoption, and GateHouse distinguishes its own resources from infrastructure still owned by CloudFormation, SST, CDK, or another external controller.
 
-The platform is designed to manage:
+Public release should still be treated as pre-1.0 until the real-world dogfood/migration path has been exercised thoroughly.
 
-- reverse proxy routing
-- static site hosting
-- internal services
-- AWS Route53 DNS
-- AWS S3 storage
-- SSL certificates
-- deployment infrastructure
-- local machine runtime state
+## Architecture
 
-The system is NOT Kubernetes.
+The core flow is:
 
-The system is NOT a distributed control plane.
-
-The system is a local infrastructure runtime platform that owns and orchestrates infrastructure resources declaratively.
-
----
-
-# Core Philosophy
-
-Gatehouse is built around:
-
-```txt
-Resources
-→ Providers
-→ Reconciliation
-→ Runtime
+```text
+Desired resources
+      ↓
+Dependency planning
+      ↓
+Provider reconciliation
+      ↓
+Runtime / AWS
+      ↓
+Health + deployment + audit state
 ```
 
-The platform is declarative.
+Main workspace packages:
 
-Users define desired infrastructure state.
+```text
+packages/
+├── types/            resource and provider contracts
+├── core/             projects, stages and shared orchestration models
+├── db/               SQLite persistence, backup and migration state
+├── resources/        resource CRUD and desired-state versioning
+├── providers/        provider implementations
+├── reconciliation/   dependency planning, convergence and health
+├── aws/              AWS SDK clients, discovery and AWS operations
+├── runtime/          local runtime paths and maintenance coordination
+└── observability/    operational/logging support
 
-Providers reconcile real infrastructure into that desired state.
-
----
-
-# Architecture Principles
-
-## 1. Declarative Infrastructure
-
-The database stores desired state.
-
-Providers reconcile runtime state.
-
-Infrastructure is generated from structured resources.
-
----
-
-## 2. Generated Infrastructure
-
-Gatehouse NEVER stores raw nginx configs.
-
-Instead:
-
-```txt
-Resource
-→ Renderer
-→ Generated Runtime Config
+apps/
+└── web/              SvelteKit control plane UI
 ```
 
-Generated configs are deterministic.
+## Resource model
 
-Same input → same output.
+Current first-class resource kinds include:
 
----
-
-## 3. Runtime Ownership
-
-Gatehouse owns its own runtime directory.
-
-NGINX consumes Gatehouse-generated configs.
-
-Gatehouse does NOT integrate itself into nginx system architecture.
-
-Instead nginx includes Gatehouse runtime configs.
-
----
-
-## 4. Separation of Concerns
-
-The system separates:
-
-```txt
-Validation
-Rendering
-Runtime Application
-Reconciliation
-Persistence
-```
-
-These are independent systems.
-
----
-
-# Runtime Architecture
-
-## Runtime Layout
-
-```txt
-runtime/
-├── generated/
-│   ├── nginx/
-│   ├── certs/
-│   └── state/
-│
-├── templates/
-│   └── nginx/
-│
-├── bin/
-│
-└── install/
-    ├── linux/
-    ├── macos/
-    └── docker/
-```
-
----
-
-# NGINX Integration
-
-NGINX includes Gatehouse-generated configs:
-
-```nginx
-include /path/to/runtime/generated/nginx/*.conf;
-```
-
-Gatehouse owns:
-
-- generation
-- rendering
-- runtime files
-
-NGINX merely consumes them.
-
----
-
-# Core Resource System
-
-Gatehouse is built around generic resources.
-
-## Resource Flow
-
-```txt
-Resource
-    ↓
-Validation
-    ↓
-Provider Resolution
-    ↓
-Reconciliation
-    ↓
-Renderer
-    ↓
-Runtime Application
-```
-
----
-
-# Base Resource Model
-
-All resources derive from:
-
-```ts
-BaseResource<TKind, TSpec>;
-```
-
-Resources contain:
-
-- metadata
-- desired state
-- runtime state
-- reconciliation status
-- provider ownership
-
----
-
-# Current Resource Types
-
-## Endpoint
-
-Represents:
-
-- reverse proxy routes
+- endpoints
+- services
+- certificates
+- DNS records
+- storage buckets
 - static sites
+- database tables
+- functions
 
-### Reverse Proxy
+Current providers include:
 
-```txt
-api.example.com
-    ↓
-localhost:3001
+- NGINX
+- filesystem
+- systemd
+- AWS Route53
+- AWS S3
+- AWS ACM
+- AWS DynamoDB
+- AWS Lambda
+
+CloudFront delivery is modeled as part of an S3-backed static site rather than as a duplicate standalone resource.
+
+## Reconciliation
+
+GateHouse uses desired-state reconciliation rather than imperative infrastructure scripts.
+
+The reconciliation engine:
+
+- resolves dependencies
+- detects dependency cycles and missing dependencies
+- reconciles resources in dependency order
+- tracks desired-state versions
+- records deployment runs
+- retries failed/unhealthy resources
+- performs health checks
+- automatically scans `deployOnChange` static sites
+- fingerprints build output to avoid unnecessary uploads and CloudFront invalidations
+
+The web runtime starts background health and reconciliation monitors automatically.
+
+Useful environment variables:
+
+```text
+GATEHOUSE_RECONCILIATION_TICK_SECONDS
+GATEHOUSE_DEPLOY_ON_CHANGE_SCAN_SECONDS
+GATEHOUSE_RECONCILIATION_UNHEALTHY_RETRY_SECONDS
+GATEHOUSE_RECONCILIATION_ERROR_RETRY_SECONDS
+GATEHOUSE_RECONCILIATION_STALE_SECONDS
+GATEHOUSE_HEALTH_MONITOR_TICK_SECONDS
 ```
 
-### Static Site
+## Ownership
 
-```txt
-app.example.com
-    ↓
-/srv/sites/app
+Infrastructure ownership is explicit.
+
+```text
+observed
+    GateHouse knows the resource exists but does not mutate it.
+
+external
+    Another controller owns it, such as CloudFormation, SST or CDK.
+
+gatehouse
+    GateHouse is the desired-state authority and may reconcile it.
 ```
 
----
+Existing infrastructure is never made GateHouse-owned merely because discovery found it.
 
-## Service
+## AWS discovery and adoption
 
-Represents:
+Each registered AWS stage has a Discovery view.
 
-- node services
-- bun services
-- docker services
-- binaries
+New and migrated AWS stages default to **read-only dogfood mode**. In this mode GateHouse can verify AWS access, refresh discovery, classify ownership, run read-only comparisons and export discovery reports, but it blocks imports, ownership transfer, stack-migration progression and AWS adoption mutations. Adoption must be explicitly enabled in Stage settings.
 
-Services may later support:
+GateHouse currently discovers:
 
-- lifecycle management
-- monitoring
-- deployments
-
----
-
-## Certificate
-
-Represents:
-
-- SSL certificates
-- wildcard certificates
-- ACM certificates
-
----
-
-## DNS Record
-
-Represents:
-
-- Route53 records
-- DNS state
-
----
-
-## Storage Bucket
-
-Represents:
-
-- local storage
+- CloudFormation stacks
 - S3 buckets
+- Route53 hosted zones and records
+- ACM certificates
+- CloudFront distributions
+- Lambda functions
+- DynamoDB tables
 
----
+Discovery is read-only and persisted locally as a stage snapshot.
 
-## Static Site
+Discovery can also export a versioned read-only estate report containing the saved scan, ownership classification, adoption eligibility, dependency requirements and warnings. The report contains no AWS credentials and does not mutate AWS.
 
-Represents:
+Supported resources can follow this flow:
 
-- deployable static sites
-- S3 deployment targets
-- local static deployment
-
----
-
-# Resource Providers
-
-Providers reconcile infrastructure.
-
-Current planned providers:
-
-```txt
-providers/
-├── nginx/
-├── filesystem/
-├── aws/
-│   ├── route53/
-│   ├── s3/
-│   └── acm/
+```text
+AWS discovery
+    ↓
+Import read-only
+    ↓
+Observed / External
+    ↓
+Dry run against live AWS
+    ↓
+Exact match
+    ↓
+Take control
+    ↓
+GateHouse-owned reconciliation
 ```
 
----
+Unsupported or incompletely modeled resources remain inventory-only.
 
-# Provider Architecture
+GateHouse intentionally refuses adoption when it cannot represent live state exactly enough to manage it safely.
 
-Each provider contains:
+## CloudFormation / SST / CDK migration
 
-```txt
-validate.ts
-render.ts
-runtime.ts
-reconcile.ts
+Children of externally managed stacks remain blocked from direct takeover.
+
+GateHouse has a staged stack-migration workflow:
+
+```text
+prepared
+    ↓
+ready_for_detach
+    ↓
+retention_update_pending
+    ↓
+retention_applied
+    ↓
+detach_pending
+    ↓
+detached
 ```
 
-## validate.ts
+Before a plain CloudFormation stack can be detached automatically, GateHouse verifies that:
 
-Ensures resource validity.
+- discovered children are represented
+- imported children match live AWS
+- the stack is plain CloudFormation
+- the template is parseable JSON
+- no Transform/macros are present
+- no nested stack resources are present
+- no custom resources are present
+- termination protection is disabled
 
-## render.ts
+For supported stacks GateHouse applies `DeletionPolicy: Retain` and `UpdateReplacePolicy: Retain` before stack deletion, verifies those policies, requires exact stack-name confirmation, and then verifies retained AWS resources still exist after the stack disappears.
 
-Pure deterministic rendering.
+SST/CDK and other ambiguous stack ownership paths remain manual rather than being guessed.
 
-NO IO.
+## Safe lifecycle operations
 
-## runtime.ts
+Resource lifecycle actions distinguish local records from real infrastructure:
 
-Performs filesystem/system mutations.
+- **Relinquish** — stop GateHouse mutation and keep observing the resource.
+- **Forget** — remove only the local GateHouse record for a non-owned resource.
+- **Destroy** — destroy supported GateHouse-owned infrastructure only after dependency and confirmation checks.
 
-## reconcile.ts
+Providers without a safe destructive workflow do not expose destruction.
 
-Coordinates:
+## Projects and stages
 
-- validation
-- rendering
-- runtime application
+Projects can contain multiple AWS stages.
 
----
+A stage stores:
 
-# Reconciliation System
+- AWS account ID
+- primary and additional regions
+- default-credential or STS assume-role access
+- capability flags
+- CloudWatch selectors
+- diagnostics profile
+- enabled/disabled state
 
-The reconciliation engine resolves:
+AWS access is verified before new or changed stage settings are accepted.
 
-- resource kind
-- provider
-- dependency order
+Stages with attached resources cannot silently change AWS account identity.
 
-Then invokes the correct provider reconciler.
+## Backup and restore
 
----
+Runtime → Backup exports the local GateHouse control plane as:
 
-# Dependency System
-
-Resources may depend on other resources.
-
-Example:
-
-```txt
-Endpoint
-    depends on
-Certificate
-    depends on
-DNS Record
+```text
+gatehouse-state v1
 ```
 
-The reconciliation engine will eventually reconcile resources in dependency order.
+The export contains:
 
----
+- resources
+- projects
+- stages
+- stage/resource links
+- audit history
+- deployment history
+- AWS discovery snapshots
+- AWS stack migration state
 
-# Runtime State
+It does **not** contain AWS access keys or copy AWS infrastructure.
 
-Resources contain runtime state separately from desired state.
+Restore:
 
-Examples:
+- validates the backup format and columns
+- pauses background runtime operations
+- writes a timestamped pre-restore rollback backup under `data/backups/`
+- replaces local control-plane tables transactionally
+- resumes runtime monitoring afterward
 
-- last reconciliation
-- health
-- last error
-- status messages
+Restore changes local GateHouse state only; it does not directly mutate AWS.
 
-This prevents mixing:
+## Runtime data
 
-- desired configuration
-- live runtime state
+By default GateHouse resolves its repository root automatically and stores:
 
----
+```text
+data/
+└── app.db
 
-# Database
-
-Initial database:
-
-- SQLite
-- single `resources` table
-
-Resources store:
-
-- metadata
-- spec
-- runtime state
-- provider
-- status
-
-Specs are initially stored as JSON.
-
-Normalization may occur later.
-
----
-
-# SvelteKit Architecture
-
-Gatehouse is built server-first.
-
-All infrastructure logic lives in:
-
-```txt
-src/lib/server/
+runtime/
+└── generated/
+    ├── nginx/
+    ├── certs/
+    └── state/
 ```
 
-Frontend UI remains thin.
+Set `GATEHOUSE_ROOT` to override the resolved root directory.
 
----
+Generated runtime state, SQLite data, package installs and build caches are excluded from Git.
 
-# Current Planned Structure
+## Development
 
-```txt
-src/
-├── lib/
-│   └── server/
-│       ├── core/
-│       ├── db/
-│       ├── providers/
-│       ├── reconciliation/
-│       ├── resources/
-│       ├── runtime/
-│       └── shell/
-│
-├── routes/
-│
-└── types/
-    └── ambient.d.ts
-```
+Requirements:
 
----
+- Node.js 22
+- pnpm 9
+- AWS credentials or an assumable IAM role for AWS-backed stages
+- NGINX/systemd only when using the corresponding local providers
 
-# Shell Execution
-
-All system commands flow through:
-
-```txt
-shell/
-├── exec.ts
-├── sudo.ts
-└── spawn.ts
-```
-
-This centralizes:
-
-- process execution
-- logging
-- permissions
-- error handling
-
----
-
-# Installation Philosophy
-
-Gatehouse installs itself.
-
-Users should NOT:
-
-- manually edit nginx
-- manually edit sudoers
-- manually create runtime dirs
-
-Instead:
+Install dependencies:
 
 ```bash
-bun run install
+pnpm install
 ```
 
-should:
+Run the web control plane:
 
-- initialize runtime
-- initialize DB
-- install runtime files
-- configure integrations
-- verify environment
-
----
-
-# Security Philosophy
-
-Infrastructure access is tightly scoped.
-
-The app itself should not run fully privileged.
-
-Runtime helpers should be isolated and minimal.
-
----
-
-# Current Scope
-
-The immediate goal is:
-
-```txt
-Create endpoint
-    ↓
-Persist resource
-    ↓
-Reconcile resource
-    ↓
-Generate nginx config
-    ↓
-Reload nginx
-    ↓
-Route becomes live
+```bash
+pnpm dev
 ```
 
----
+Quality gates:
 
-# Future Planned Features
+```bash
+pnpm check
+pnpm test
+pnpm build
+```
 
-## AWS Integration
+## Linux host setup
 
-- Route53
-- S3
-- ACM
-- CloudFront
+Local NGINX/systemd providers use narrowly scoped root helpers while the GateHouse application itself continues running as a non-root user.
 
----
+Install host helpers with:
 
-## Local Infrastructure
+```bash
+pnpm setup:linux
+```
 
-- nginx orchestration
-- filesystem management
-- service management
-- static hosting
+or directly:
 
----
+```bash
+sudo bash install/linux/install.sh
+```
 
-## Deployment Features
+The installer:
 
-- static deployments
-- S3 sync
-- CloudFront invalidation
-- service deployments
+- determines the non-root GateHouse user
+- verifies required host commands
+- installs GateHouse NGINX/service helper executables
+- writes a constrained sudoers entry
+- validates the sudoers file
+- validates NGINX configuration
 
----
+## Safety principles
 
-## Monitoring
+GateHouse prefers refusal over ambiguous infrastructure mutation.
 
-- health checks
-- reconciliation status
-- runtime diagnostics
-- audit logs
+In particular:
 
----
+- discovery does not imply ownership
+- externally managed stack children cannot be adopted piecemeal
+- dry-run/health comparison precedes ownership transfer
+- failed first reconciliation rolls ownership back
+- dependency checks precede destructive lifecycle operations
+- data-bearing providers may intentionally omit destroy support
+- restore is transactional and runs under maintenance mode
+- unsupported AWS topology remains inventory-only
 
-# Non-Goals
+## Tests and CI
 
-Gatehouse is NOT:
+`GateHouse Check` runs on the active development branch and pull requests.
 
-- Kubernetes
-- a distributed control plane
-- a cluster orchestrator
-- a service mesh
+The release gate includes:
 
-The platform is intentionally:
+1. dependency installation
+2. TypeScript/Svelte checks
+3. safety tests
+4. build
 
-- local-first
-- deterministic
-- infrastructure-focused
-- lightweight
+Safety tests currently cover dependency planning, cycle/missing-dependency failures, ownership classification, and CloudFormation retention transformation/refusal rules.
 
----
+## Release direction
 
-# Current Status
+Before a public 1.0 release GateHouse should be dogfooded against a real existing AWS estate and exercise:
 
-Architecture phase.
+- discovery accuracy
+- observed/external ownership classification
+- individual adoption
+- CloudFormation retention/detach flows
+- reconciliation recovery
+- backup/restore
+- destructive lifecycle confirmations
 
-Core systems defined:
-
-- resource system
-- provider system
-- reconciliation architecture
-- runtime ownership model
-- nginx ownership model
-- runtime directory structure
-
-Next step:
-implement core runtime and reconciliation engine.
+The goal is not to support every possible AWS topology immediately. The goal is to make every supported topology explicit, inspectable, and safe.

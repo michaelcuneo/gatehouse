@@ -13,13 +13,31 @@ export type StoredResourceKind =
   | "certificate"
   | "dns_record"
   | "storage_bucket"
-  | "static_site";
+  | "static_site"
+  | "database_table"
+  | "function";
 
 export interface StoredResourceMetadata {
   description?: string;
   tags?: string[];
   managed?: boolean;
-  [key: string]: unknown;
+  ownership?: {
+    mode: "gatehouse" | "external" | "observed";
+    externalOwner?: {
+      type: "cloudformation" | "sst" | "cdk" | "unknown";
+      id?: string;
+      name?: string;
+    };
+  };
+  importedFrom?: {
+    provider: "aws";
+    discoveryId: string;
+    physicalId: string;
+    accountId: string;
+    region: string;
+    importedAt: string;
+  };
+  dependsOn?: string[];
 }
 
 export interface StoredResourceRuntime {
@@ -27,7 +45,8 @@ export interface StoredResourceRuntime {
   lastError?: string;
   lastStatusMessage?: string;
   healthy?: boolean;
-  [key: string]: unknown;
+  lastHealthCheckAt?: string;
+  lastHealthMessage?: string;
 }
 
 export interface StoredResource<TSpec = unknown> {
@@ -183,10 +202,17 @@ export function updateResourceState(
   const resource = getResource(id);
   if (!resource) return null;
 
+  const enabledChanged =
+    patch.enabled !== undefined &&
+    patch.enabled !== resource.enabled;
+
   return saveResource({
     ...resource,
     status: patch.status ?? resource.status,
     enabled: patch.enabled ?? resource.enabled,
+    version: enabledChanged
+      ? resource.version + 1
+      : resource.version,
     runtime:
       patch.runtime === undefined
         ? resource.runtime
