@@ -9,6 +9,10 @@
     data.discovery.resources.filter((resource) => resource.ownership === 'observed')
   );
 
+  const adoptionLocked = $derived(
+    (data.stage.adoptionMode ?? 'read_only') !== 'enabled'
+  );
+
   const supportsImport = (
     resource: (typeof data.discovery.resources)[number]
   ) => data.adoption[resource.id]?.importable === true;
@@ -104,6 +108,18 @@
       </a>
     </div>
   </div>
+
+  {#if adoptionLocked}
+    <section class="panel">
+      <span class="eyebrow">Read-only dogfood mode</span>
+      <h2>AWS mutation lock active</h2>
+      <p class="muted">
+        Discovery, reports, health comparison and safe verification remain available.
+        Imports, ownership changes, stack-migration progression and AWS adoption mutations are blocked
+        until this stage is explicitly unlocked in Stage settings.
+      </p>
+    </section>
+  {/if}
 
   <section class="panel">
     <span class="eyebrow">Adoption coverage</span>
@@ -283,14 +299,20 @@
                   </div>
 
                   {#if migration.status === 'prepared'}
+                    {#if adoptionLocked}
+                      <p class="muted">Read-only mode blocks migration progression.</p>
+                    {:else}
                     <form method="POST" action="?/verifyMigration">
                       <input type="hidden" name="stackId" value={stack.id} />
                       <button class="button" type="submit">
                         Verify migration
                       </button>
                     </form>
+                    {/if}
                   {:else if migration.status === 'ready_for_detach'}
-                    {#if stack.ownerType === 'cloudformation'}
+                    {#if adoptionLocked}
+                      <p class="muted">Read-only mode blocks retention changes.</p>
+                    {:else if stack.ownerType === 'cloudformation'}
                       <form method="POST" action="?/applyRetention">
                         <input type="hidden" name="stackId" value={stack.id} />
                         <button class="button" type="submit">
@@ -311,8 +333,12 @@
                     </form>
                   {:else if migration.status === 'retention_applied'}
                     <p class="muted">
-                      Every stack resource is configured to be retained. Type the exact stack name to initiate CloudFormation detach.
+                      Every stack resource is configured to be retained.
                     </p>
+                    {#if adoptionLocked}
+                      <p class="muted">Read-only mode blocks stack detach initiation.</p>
+                    {:else}
+                      <p class="muted">Type the exact stack name to initiate CloudFormation detach.</p>
                     <form method="POST" action="?/detachStack">
                       <input type="hidden" name="stackId" value={stack.id} />
                       <div class="field">
@@ -326,6 +352,7 @@
                         Detach stack ownership
                       </button>
                     </form>
+                    {/if}
                   {:else if migration.status === 'detach_pending'}
                     <p class="muted">
                       CloudFormation deletion is in progress. Resources are configured to be retained.
@@ -351,12 +378,16 @@
                     </form>
                   {/if}
                 {:else}
+                  {#if adoptionLocked}
+                    <span class="muted">Read-only mode</span>
+                  {:else}
                   <form method="POST" action="?/prepareMigration">
                     <input type="hidden" name="stackId" value={stack.id} />
                     <button class="pill" type="submit">
                       Prepare migration
                     </button>
                   </form>
+                  {/if}
                 {/if}
               </td>
             </tr>
@@ -447,12 +478,16 @@
               <td>
                 {#if !imported}
                   {#if supportsImport(resource)}
+                    {#if adoptionLocked}
+                      <span class="muted">Import blocked by read-only mode</span>
+                    {:else}
                     <form method="POST" action="?/import">
                       <input type="hidden" name="discoveryId" value={resource.id} />
                       <button class="pill" type="submit">
                         Import read-only
                       </button>
                     </form>
+                    {/if}
                   {:else}
                     <span class="muted">Inventory only</span>
                   {/if}
@@ -471,7 +506,7 @@
                       </button>
                     </form>
 
-                    {#if dryRunPassedFor(imported.id)}
+                    {#if dryRunPassedFor(imported.id) && !adoptionLocked}
                       <form method="POST" action="?/takeControl">
                         <input type="hidden" name="resourceId" value={imported.id} />
                         <button class="button" type="submit">
