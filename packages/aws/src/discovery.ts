@@ -352,7 +352,7 @@ async function discoverStacks(
   return { stacks, ownership, resources };
 }
 
-export function ownerFor(
+export function ownershipCandidatesFor(
   physicalId: string,
   ownership: Map<
     string,
@@ -362,7 +362,7 @@ export function ownerFor(
     AwsDiscoveredResource,
     "resourceType" | "region"
   >,
-): AwsDiscoveredOwner | undefined {
+): StackOwnershipIndexEntry[] {
   const candidates = new Map<
     string,
     StackOwnershipIndexEntry
@@ -393,30 +393,40 @@ export function ownerFor(
   let matches = [...candidates.values()];
 
   if (resource?.resourceType) {
-    const typed = matches.filter(
+    matches = matches.filter(
       (owner) =>
         owner.resourceType === resource.resourceType,
     );
-
-    if (typed.length) {
-      matches = typed;
-    }
   }
 
   if (
     resource?.region &&
     resource.region !== "global"
   ) {
-    const regional = matches.filter(
+    matches = matches.filter(
       (owner) => owner.region === resource.region,
     );
-
-    if (regional.length) {
-      matches = regional;
-    } else if (matches.length > 1) {
-      return undefined;
-    }
   }
+
+  return matches;
+}
+
+export function ownerFor(
+  physicalId: string,
+  ownership: Map<
+    string,
+    StackOwnershipIndexEntry | StackOwnershipIndexEntry[]
+  >,
+  resource?: Pick<
+    AwsDiscoveredResource,
+    "resourceType" | "region"
+  >,
+): AwsDiscoveredOwner | undefined {
+  const matches = ownershipCandidatesFor(
+    physicalId,
+    ownership,
+    resource,
+  );
 
   if (matches.length !== 1) {
     return undefined;
@@ -436,16 +446,37 @@ export function discovered(
   input: Omit<AwsDiscoveredResource, "ownership" | "owner">,
   ownership: StackOwnershipIndex,
 ): AwsDiscoveredResource {
-  const owner = ownerFor(
+  const candidates = ownershipCandidatesFor(
     input.physicalId,
     ownership,
     input,
   );
+  const owner =
+    candidates.length === 1
+      ? {
+          type: candidates[0].type,
+          id: candidates[0].id,
+          name: candidates[0].name,
+          logicalId: candidates[0].logicalId,
+        }
+      : undefined;
+  const ambiguous = candidates.length > 1;
 
   return {
     ...input,
-    ownership: owner ? "external" : "observed",
+    ownership:
+      candidates.length > 0
+        ? "external"
+        : "observed",
     owner,
+    details: ambiguous
+      ? {
+          ...(input.details ?? {}),
+          ownershipAmbiguous: true,
+          ownershipCandidateCount:
+            candidates.length,
+        }
+      : input.details,
   };
 }
 
