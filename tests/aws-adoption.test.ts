@@ -8,6 +8,7 @@ import {
   assessAwsDiscoveryResource,
   awsStageAdoptionEnabled,
   buildAwsDiscoveryDogfoodReport,
+  evaluateAwsDogfoodReadiness,
   s3BucketFromOriginDomain,
   summarizeAwsDiscoveryAdoption,
 } from "../packages/aws/src/adoption.ts";
@@ -439,4 +440,99 @@ test("dogfood discovery report excludes AWS access credentials and carries adopt
   assert.equal(serialized.includes("externalId"), false);
   assert.equal(serialized.includes("sourceIdentity"), false);
   assert.equal(serialized.includes('"access"'), false);
+});
+
+
+test("dogfood readiness requires lock, account match, full region coverage and no warnings", () => {
+  const stage = {
+    accountId: "123456789012",
+    primaryRegion: "ap-southeast-2",
+    additionalRegions: ["us-east-1"],
+    adoptionMode: "read_only" as const,
+  };
+
+  const healthyDiscovery = {
+    accountId: "123456789012",
+    scannedAt: "2026-09-26T10:00:00.000Z",
+    regions: ["ap-southeast-2", "us-east-1"],
+    stacks: [],
+    resources: [],
+    warnings: [],
+  } as any;
+
+  const ready = evaluateAwsDogfoodReadiness(
+    stage,
+    healthyDiscovery,
+  );
+
+  assert.equal(ready.ready, true);
+  assert.deepEqual(ready.blockers, []);
+
+  const unlocked = evaluateAwsDogfoodReadiness(
+    {
+      ...stage,
+      adoptionMode: "enabled",
+    },
+    healthyDiscovery,
+  );
+
+  assert.equal(unlocked.ready, false);
+  assert.ok(
+    unlocked.blockers.some((value) =>
+      value.includes("lock is not active"),
+    ),
+  );
+
+  const wrongAccount = evaluateAwsDogfoodReadiness(
+    stage,
+    {
+      ...healthyDiscovery,
+      accountId: "999999999999",
+    },
+  );
+
+  assert.equal(wrongAccount.ready, false);
+  assert.ok(
+    wrongAccount.blockers.some((value) =>
+      value.includes("does not match configured account"),
+    ),
+  );
+
+  const missingRegion = evaluateAwsDogfoodReadiness(
+    stage,
+    {
+      ...healthyDiscovery,
+      regions: ["ap-southeast-2"],
+    },
+  );
+
+  assert.equal(missingRegion.ready, false);
+  assert.ok(
+    missingRegion.blockers.some((value) =>
+      value.includes("us-east-1"),
+    ),
+  );
+
+  const warned = evaluateAwsDogfoodReadiness(
+    stage,
+    {
+      ...healthyDiscovery,
+      warnings: ["AccessDenied on service"],
+    },
+  );
+
+  assert.equal(warned.ready, false);
+  assert.ok(
+    warned.blockers.some((value) =>
+      value.includes("1 warning"),
+    ),
+  );
+
+  const unscanned = evaluateAwsDogfoodReadiness(
+    stage,
+    null,
+  );
+
+  assert.equal(unscanned.ready, false);
+  assert.ok(unscanned.blockers.length >= 3);
 });
