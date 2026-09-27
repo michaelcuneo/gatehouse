@@ -67,7 +67,7 @@
     {/if}
   </section>
 
-  {#if data.section.kind === 'certificate' || data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'database_table' || data.section.kind === 'static_site'}
+  {#if data.section.kind === 'certificate' || data.section.kind === 'dns_record' || data.section.kind === 'service' || data.section.kind === 'storage_bucket' || data.section.kind === 'database_table' || data.section.kind === 'function' || data.section.kind === 'static_site'}
     <div class="section-head">
       <div>
         <span class="eyebrow">Desired state</span>
@@ -82,7 +82,9 @@
                 ? 'Create storage'
                 : data.section.kind === 'database_table'
                   ? 'Create DynamoDB table'
-                  : 'Create static deployment'}
+                  : data.section.kind === 'function'
+                    ? 'Manage existing Lambda function'
+                    : 'Create static deployment'}
         </h2>
       </div>
     </div>
@@ -461,6 +463,103 @@
               <input name="deletionProtection" type="checkbox" checked />
               Enable deletion protection
             </label>
+          {:else if data.section.kind === 'function'}
+            <div class="field">
+              <label for="stageId">Project stage</label>
+              <select id="stageId" name="stageId" required>
+                <option value="">Select target stage</option>
+                {#each data.projectStages as stage}
+                  <option value={stage.stageId}>
+                    {stage.label} · {stage.accountId} · {stage.region}
+                  </option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="functionName">Existing Lambda function name</label>
+              <input
+                id="functionName"
+                name="functionName"
+                placeholder="my-function"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="region">Region</label>
+              <input
+                id="region"
+                name="region"
+                placeholder="Uses selected stage region"
+              />
+            </div>
+
+            <div class="field">
+              <label for="runtime">Runtime</label>
+              <input
+                id="runtime"
+                name="runtime"
+                placeholder="Optional — leave unchanged"
+              />
+            </div>
+
+            <div class="field">
+              <label for="handler">Handler</label>
+              <input
+                id="handler"
+                name="handler"
+                placeholder="Optional — leave unchanged"
+              />
+            </div>
+
+            <div class="field">
+              <label for="memorySize">Memory (MB)</label>
+              <input
+                id="memorySize"
+                name="memorySize"
+                type="number"
+                min="128"
+                max="10240"
+                value="128"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="timeout">Timeout (seconds)</label>
+              <input
+                id="timeout"
+                name="timeout"
+                type="number"
+                min="1"
+                max="900"
+                value="3"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="architecture">Architecture</label>
+              <select id="architecture" name="architecture">
+                <option value="x86_64">x86_64</option>
+                <option value="arm64">arm64</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="roleArn">Execution role ARN</label>
+              <input
+                id="roleArn"
+                name="roleArn"
+                placeholder="Optional — verified only, never changed"
+              />
+            </div>
+
+            <p class="muted">
+              GateHouse manages configuration for an existing Lambda function.
+              The code package remains externally managed.
+            </p>
           {:else}
             <div class="field">
               <label for="deploymentTarget">Deployment target</label>
@@ -602,11 +701,15 @@
                   ? storageProvider === 's3'
                     ? 'Create S3 bucket'
                     : 'Create local storage'
-                  : staticDeploymentTarget === 's3'
-                    ? cloudFrontEnabled
-                      ? 'Deploy to S3 + CloudFront'
-                      : 'Deploy to S3'
-                    : 'Deploy static site'}
+                  : data.section.kind === 'database_table'
+                    ? 'Create DynamoDB table'
+                    : data.section.kind === 'function'
+                      ? 'Manage Lambda function'
+                      : staticDeploymentTarget === 's3'
+                        ? cloudFrontEnabled
+                          ? 'Deploy to S3 + CloudFront'
+                          : 'Deploy to S3'
+                        : 'Deploy static site'}
           </button>
         </div>
       </form>
