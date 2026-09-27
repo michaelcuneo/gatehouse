@@ -1,3 +1,5 @@
+import type { ResourceProvider } from "@gatehouse/types";
+import type { Provider } from "./types";
 import { acmProvider } from "./acm";
 import { filesystemProvider } from "./filesystem";
 import { dynamodbProvider } from "./dynamodb";
@@ -16,8 +18,10 @@ export const providers = {
   acm: acmProvider,
   dynamodb: dynamodbProvider,
   lambda: lambdaProvider,
-};
+} satisfies Record<ResourceProvider, Provider>;
 
-export function getProvider(name: string) {
-  return providers[name as keyof typeof providers];
+export function getProvider(
+  name: ResourceProvider,
+): Provider {
+  return providers[name];
 }
