@@ -16,6 +16,7 @@
     "@gatehouse/db": "workspace:*",
     "@gatehouse/providers": "workspace:*",
     "@gatehouse/resources": "workspace:*",
+    "@gatehouse/runtime": "workspace:*",
     "@gatehouse/types": "workspace:*"
   }
 }

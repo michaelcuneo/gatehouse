@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_file="${1:-}"
+filename="${2:-}"
+autostart="${3:-1}"
+
+if [[ -z "$source_file" || -z "$filename" ]]; then
+  echo "usage: gatehouse-service-apply <source.service> <filename.service> [autostart]" >&2
+  exit 64
+fi
+
+if [[ "$filename" == */* || "$filename" != gatehouse-*.service ]]; then
+  echo "invalid GateHouse service filename: $filename" >&2
+  exit 64
+fi
+
+if [[ ! -f "$source_file" ]]; then
+  echo "generated service unit does not exist: $source_file" >&2
+  exit 66
+fi
+
+target="/etc/systemd/system/$filename"
+install -m 0644 "$source_file" "$target"
+
+systemctl daemon-reload
+
+if [[ "$autostart" == "1" || "$autostart" == "true" ]]; then
+  systemctl enable --now "$filename"
+else
+  systemctl disable "$filename" >/dev/null 2>&1 || true
+  systemctl restart "$filename"
+fi

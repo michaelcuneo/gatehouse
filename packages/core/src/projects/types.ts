@@ -63,6 +63,8 @@ export interface AwsResourceSelector {
   tags?: Record<string, string>;
 }
 
+export type AwsAdoptionMode = "read_only" | "enabled";
+
 export interface ManagedStage {
   id: string;
   name: string;
@@ -73,6 +75,7 @@ export interface ManagedStage {
   capabilities: ProjectCapabilities;
   selectors?: AwsResourceSelector[];
   manifest?: ProjectManifestLocation;
+  adoptionMode?: AwsAdoptionMode;
   enabled: boolean;
 }
 

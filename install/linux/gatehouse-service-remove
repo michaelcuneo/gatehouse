@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+filename="${2:-${1:-}}"
+
+if [[ -z "$filename" || "$filename" == */* || "$filename" != gatehouse-*.service ]]; then
+  echo "usage: gatehouse-service-remove [generated-path] <filename.service>" >&2
+  exit 64
+fi
+
+systemctl disable --now "$filename" >/dev/null 2>&1 || true
+rm -f "/etc/systemd/system/$filename"
+systemctl daemon-reload
+systemctl reset-failed "$filename" >/dev/null 2>&1 || true

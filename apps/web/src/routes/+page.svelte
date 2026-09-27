@@ -1,13 +1,15 @@
 <script lang="ts">
   let { data } = $props();
 
-  const totalResources = Object.values(data.resourceCounts).reduce(
-    (sum, value) => sum + (value ?? 0),
-    0
+  const totalResources = $derived(
+    Object.values(data.resourceCounts).reduce(
+      (sum, value) => sum + (value ?? 0),
+      0
+    )
   );
 
-  const healthy = data.statusCounts.ready ?? 0;
-  const errors = data.statusCounts.error ?? 0;
+  const healthy = $derived(data.statusCounts.ready ?? 0);
+  const errors = $derived(data.statusCounts.error ?? 0);
 </script>
 
 <main class="container">

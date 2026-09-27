@@ -1,5 +1,35 @@
 import { getDatabase } from "./client";
 
+type TableInfoRow = {
+  name: string;
+};
+
+function ensureManagedStageColumns(): void {
+  const sqlite = getDatabase();
+  const columns = sqlite
+    .prepare("PRAGMA table_info(managed_project_stages)")
+    .all() as TableInfoRow[];
+
+  if (!columns.some((column) => column.name === "adoption_mode")) {
+    sqlite.exec(
+      "ALTER TABLE managed_project_stages ADD COLUMN adoption_mode TEXT NOT NULL DEFAULT 'read_only'",
+    );
+  }
+}
+
+function ensureDeploymentColumns(): void {
+  const sqlite = getDatabase();
+  const columns = sqlite
+    .prepare("PRAGMA table_info(deployments)")
+    .all() as TableInfoRow[];
+
+  if (!columns.some((column) => column.name === "artifact_fingerprint")) {
+    sqlite.exec(
+      "ALTER TABLE deployments ADD COLUMN artifact_fingerprint TEXT",
+    );
+  }
+}
+
 export function initDatabase() {
   const sqlite = getDatabase();
 
@@ -42,6 +72,7 @@ export function initDatabase() {
       capabilities TEXT NOT NULL,
       selectors TEXT,
       manifest TEXT,
+      adoption_mode TEXT NOT NULL DEFAULT 'read_only',
       enabled INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY(project_id)
         REFERENCES managed_projects(id)
@@ -67,5 +98,70 @@ export function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_managed_project_resources_resource
       ON managed_project_resources(resource_id);
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      resource_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      success INTEGER NOT NULL,
+      message TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_resource
+      ON audit_logs(resource_id, timestamp DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp
+      ON audit_logs(timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS aws_discovery_snapshots (
+      stage_id TEXT PRIMARY KEY,
+      scanned_at TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      FOREIGN KEY(stage_id)
+        REFERENCES managed_project_stages(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS aws_stack_migrations (
+      stage_id TEXT NOT NULL,
+      stack_id TEXT NOT NULL,
+      stack_name TEXT NOT NULL,
+      owner_type TEXT NOT NULL,
+      region TEXT NOT NULL,
+      status TEXT NOT NULL,
+      prepared_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(stage_id, stack_id),
+      FOREIGN KEY(stage_id)
+        REFERENCES managed_project_stages(id)
+        ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_aws_stack_migrations_stage
+      ON aws_stack_migrations(stage_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS deployments (
+      id TEXT PRIMARY KEY,
+      resource_id TEXT NOT NULL,
+      resource_name TEXT NOT NULL,
+      resource_kind TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      resource_version INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      artifact_fingerprint TEXT,
+      message TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_deployments_resource
+      ON deployments(resource_id, started_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_deployments_started
+      ON deployments(started_at DESC);
   `);
+
+  ensureManagedStageColumns();
+  ensureDeploymentColumns();
 }

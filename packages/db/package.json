@@ -16,6 +16,7 @@
   "dependencies": {
     "@gatehouse/core": "workspace:*",
     "@gatehouse/runtime": "workspace:*",
+    "@gatehouse/types": "workspace:*",
     "better-sqlite3": "^12.10.0"
   }
 }

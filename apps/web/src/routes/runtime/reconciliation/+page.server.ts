@@ -1,6 +1,9 @@
 import type { PageServerLoad } from './$types';
 
-import { listResources } from '@gatehouse/db';
+import {
+  listAuditLogs,
+  listResources
+} from '@gatehouse/db';
 
 export const load: PageServerLoad = async () => {
   const resources = listResources().sort((a, b) => {
@@ -9,5 +12,15 @@ export const load: PageServerLoad = async () => {
     return bTime.localeCompare(aTime);
   });
 
-  return { resources };
+  const resourceNames = Object.fromEntries(
+    resources.map((resource) => [resource.id, resource.name])
+  );
+
+  return {
+    resources,
+    history: listAuditLogs({ limit: 100 }).map((entry) => ({
+      ...entry,
+      resourceName: resourceNames[entry.resourceId] ?? entry.resourceId
+    }))
+  };
 };

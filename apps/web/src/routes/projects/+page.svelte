@@ -36,6 +36,72 @@
               </a>
             {/each}
           </div>
+
+          <details>
+            <summary class="pill">Project settings</summary>
+
+            <form method="POST" action="?/updateProject">
+              <input type="hidden" name="projectId" value={project.id} />
+
+              <div class="form-grid">
+                <div class="field">
+                  <label for={'project-name-' + project.id}>Name</label>
+                  <input
+                    id={'project-name-' + project.id}
+                    name="projectName"
+                    value={project.name}
+                    required
+                  />
+                </div>
+
+                <div class="field">
+                  <label for={'project-slug-' + project.id}>Slug</label>
+                  <input
+                    id={'project-slug-' + project.id}
+                    name="projectSlug"
+                    value={project.slug}
+                    required
+                  />
+                </div>
+
+                <div class="field">
+                  <label for={'project-diagnostics-' + project.id}>Diagnostics profile</label>
+                  <input
+                    id={'project-diagnostics-' + project.id}
+                    name="projectDiagnosticsProfile"
+                    value={project.diagnosticsProfile ?? ''}
+                  />
+                </div>
+              </div>
+
+              <div class="actions">
+                <button class="pill" type="submit">Save project</button>
+              </div>
+            </form>
+
+            {#if project.stages.length === 0}
+              <form method="POST" action="?/removeProject">
+                <input type="hidden" name="projectId" value={project.id} />
+                <div class="field">
+                  <label for={'project-remove-' + project.id}>Remove project</label>
+                  <input
+                    id={'project-remove-' + project.id}
+                    name="confirmation"
+                    placeholder={project.slug}
+                    autocomplete="off"
+                  />
+                  <p class="muted">
+                    Type the exact project name or slug. This only removes the empty GateHouse registry entry.
+                  </p>
+                </div>
+                <button class="pill" type="submit">Remove project</button>
+              </form>
+            {:else}
+              <p class="muted">
+                Remove all project stages before removing this registry entry.
+              </p>
+            {/if}
+          </details>
         </article>
       {/each}
     </div>
@@ -48,6 +114,84 @@
       </p>
     </section>
   {/if}
+
+  {#if form?.action === 'addStage' && form?.success}
+    <p class="muted mono">
+      Added stage {form.stageName}.
+    </p>
+  {:else if form?.action === 'registerProject' && form?.success}
+    <p class="muted mono">Project registered.</p>
+  {:else if form?.action === 'updateProject' && form?.success}
+    <p class="muted mono">Project settings saved.</p>
+  {:else if form?.action === 'removeProject' && form?.success}
+    <p class="muted mono">Project registry entry removed.</p>
+  {/if}
+
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Project stages</span>
+      <h2>Add stage</h2>
+    </div>
+  </div>
+
+  <section class="panel">
+    {#if form?.error}
+      <p class="error">{form.error}</p>
+    {/if}
+
+    <form method="POST" action="?/addStage">
+      <div class="form-grid">
+        <div class="field">
+          <label for="projectId">Project</label>
+          <select id="projectId" name="projectId" required>
+            <option value="">Select project</option>
+            {#each data.projects as project}
+              <option value={project.id}>{project.name}</option>
+            {/each}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="stageName">Stage name</label>
+          <input id="stageName" name="stageName" placeholder="staging" required />
+        </div>
+
+        <div class="field">
+          <label for="stageAccountId">AWS account ID</label>
+          <input
+            id="stageAccountId"
+            name="stageAccountId"
+            inputmode="numeric"
+            placeholder="123456789012"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label for="stageRegion">Primary region</label>
+          <input
+            id="stageRegion"
+            name="stageRegion"
+            value="ap-southeast-2"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label for="stageRoleArn">Assume-role ARN</label>
+          <input
+            id="stageRoleArn"
+            name="stageRoleArn"
+            placeholder="Optional for runtime credentials"
+          />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="button" type="submit">Add verified stage</button>
+      </div>
+    </form>
+  </section>
 
   <div class="section-head">
     <div>

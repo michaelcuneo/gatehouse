@@ -1,325 +1,102 @@
-// ============================================
-// CORE RESOURCE SYSTEM
-// ============================================
+import type {
+  AuditLog as GateHouseAuditLog,
+  AWSProvider as GateHouseAWSProvider,
+  BaseResource as GateHouseBaseResource,
+  CertificateProvider as GateHouseCertificateProvider,
+  CertificateResource as GateHouseCertificateResource,
+  CertificateSpec as GateHouseCertificateSpec,
+  DNSRecordResource as GateHouseDNSRecordResource,
+  DNSRecordSpec as GateHouseDNSRecordSpec,
+  DNSRecordType as GateHouseDNSRecordType,
+  EndpointMode as GateHouseEndpointMode,
+  EndpointResource as GateHouseEndpointResource,
+  EndpointSpec as GateHouseEndpointSpec,
+  GeneratedNginxConfig as GateHouseGeneratedNginxConfig,
+  LocalProvider as GateHouseLocalProvider,
+  LocalStorageSpec as GateHouseLocalStorageSpec,
+  MachineState as GateHouseMachineState,
+  ReconciliationContext as GateHouseReconciliationContext,
+  ReconciliationResult as GateHouseReconciliationResult,
+  Resource as GateHouseResource,
+  ResourceDependencyGraph as GateHouseResourceDependencyGraph,
+  ResourceId as GateHouseResourceId,
+  ResourceKind as GateHouseResourceKind,
+  ResourceProvider as GateHouseResourceProvider,
+  ResourceProviderHandler as GateHouseResourceProviderHandler,
+  ResourceReference as GateHouseResourceReference,
+  ResourceStatus as GateHouseResourceStatus,
+  ReverseProxyEndpointSpec as GateHouseReverseProxyEndpointSpec,
+  S3StorageSpec as GateHouseS3StorageSpec,
+  ServicePort as GateHouseServicePort,
+  ServiceResource as GateHouseServiceResource,
+  ServiceRuntime as GateHouseServiceRuntime,
+  ServiceSpec as GateHouseServiceSpec,
+  StaticEndpointSpec as GateHouseStaticEndpointSpec,
+  StaticSiteResource as GateHouseStaticSiteResource,
+  StaticSiteSpec as GateHouseStaticSiteSpec,
+  StorageBucketResource as GateHouseStorageBucketResource,
+  StorageBucketSpec as GateHouseStorageBucketSpec,
+  StorageProvider as GateHouseStorageProvider,
+  Timestamp as GateHouseTimestamp,
+} from "@gatehouse/types";
 
-type ResourceId = string;
-type Timestamp = string;
+declare global {
+  type ResourceId = GateHouseResourceId;
+  type Timestamp = GateHouseTimestamp;
 
-type LocalProvider = 'nginx' | 'filesystem' | 'systemd';
+  type LocalProvider = GateHouseLocalProvider;
+  type AWSProvider = GateHouseAWSProvider;
+  type ResourceProvider = GateHouseResourceProvider;
 
-type AWSProvider = 'route53' | 's3' | 'acm';
+  type ResourceKind = GateHouseResourceKind;
+  type ResourceStatus = GateHouseResourceStatus;
 
-type ResourceProvider = LocalProvider | AWSProvider;
+  type BaseResource<
+    TKind extends ResourceKind,
+    TSpec,
+  > = GateHouseBaseResource<TKind, TSpec>;
 
-type ResourceKind =
-	| 'endpoint'
-	| 'service'
-	| 'certificate'
-	| 'dns_record'
-	| 'storage_bucket'
-	| 'static_site';
+  type EndpointMode = GateHouseEndpointMode;
+  type ReverseProxyEndpointSpec = GateHouseReverseProxyEndpointSpec;
+  type StaticEndpointSpec = GateHouseStaticEndpointSpec;
+  type EndpointSpec = GateHouseEndpointSpec;
+  type EndpointResource = GateHouseEndpointResource;
 
-type ResourceStatus = 'pending' | 'reconciling' | 'ready' | 'error' | 'disabled';
+  type ServiceRuntime = GateHouseServiceRuntime;
+  type ServicePort = GateHouseServicePort;
+  type ServiceSpec = GateHouseServiceSpec;
+  type ServiceResource = GateHouseServiceResource;
 
-interface BaseResource<TKind extends ResourceKind, TSpec> {
-	id: ResourceId;
+  type CertificateProvider = GateHouseCertificateProvider;
+  type CertificateSpec = GateHouseCertificateSpec;
+  type CertificateResource = GateHouseCertificateResource;
 
-	kind: TKind;
+  type DNSRecordType = GateHouseDNSRecordType;
+  type DNSRecordSpec = GateHouseDNSRecordSpec;
+  type DNSRecordResource = GateHouseDNSRecordResource;
 
-	name: string;
+  type StorageProvider = GateHouseStorageProvider;
+  type LocalStorageSpec = GateHouseLocalStorageSpec;
+  type S3StorageSpec = GateHouseS3StorageSpec;
+  type StorageBucketSpec = GateHouseStorageBucketSpec;
+  type StorageBucketResource = GateHouseStorageBucketResource;
 
-	provider: ResourceProvider;
+  type StaticSiteSpec = GateHouseStaticSiteSpec;
+  type StaticSiteResource = GateHouseStaticSiteResource;
 
-	version: number;
+  type Resource = GateHouseResource;
 
-	enabled: boolean;
+  type ReconciliationResult = GateHouseReconciliationResult;
+  type ReconciliationContext = GateHouseReconciliationContext;
+  type ResourceProviderHandler<
+    T extends Resource = Resource,
+  > = GateHouseResourceProviderHandler<T>;
 
-	status: ResourceStatus;
-
-	createdAt: Timestamp;
-	updatedAt: Timestamp;
-
-	metadata?: {
-		description?: string;
-
-		tags?: string[];
-
-		managed?: boolean;
-	};
-
-	runtime?: {
-		lastReconciledAt?: Timestamp;
-
-		lastError?: string;
-
-		lastStatusMessage?: string;
-
-		healthy?: boolean;
-	};
-
-	spec: TSpec;
+  type GeneratedNginxConfig = GateHouseGeneratedNginxConfig;
+  type ResourceReference = GateHouseResourceReference;
+  type ResourceDependencyGraph = GateHouseResourceDependencyGraph;
+  type MachineState = GateHouseMachineState;
+  type AuditLog = GateHouseAuditLog;
 }
 
-// ============================================
-// ENDPOINTS
-// ============================================
-
-type EndpointMode = 'reverse_proxy' | 'static';
-
-interface ReverseProxyEndpointSpec {
-	mode: 'reverse_proxy';
-
-	host: string;
-
-	upstream: {
-		host: string;
-		port: number;
-	};
-
-	websocket?: boolean;
-
-	ssl?: boolean;
-
-	redirectToHttps?: boolean;
-}
-
-interface StaticEndpointSpec {
-	mode: 'static';
-
-	host: string;
-
-	root: string;
-
-	spaFallback?: boolean;
-
-	ssl?: boolean;
-
-	redirectToHttps?: boolean;
-}
-
-type EndpointSpec = ReverseProxyEndpointSpec | StaticEndpointSpec;
-
-type EndpointResource = BaseResource<'endpoint', EndpointSpec>;
-
-// ============================================
-// SERVICES
-// ============================================
-
-type ServiceRuntime = 'node' | 'bun' | 'docker' | 'python' | 'binary';
-
-interface ServicePort {
-	name: string;
-	port: number;
-	protocol: 'http' | 'https' | 'tcp';
-}
-
-interface ServiceSpec {
-	runtime: ServiceRuntime;
-
-	workingDirectory: string;
-
-	startCommand: string;
-
-	envFile?: string;
-
-	ports: ServicePort[];
-
-	autoStart?: boolean;
-
-	healthcheck?: {
-		path: string;
-		intervalSeconds: number;
-	};
-}
-
-type ServiceResource = BaseResource<'service', ServiceSpec>;
-
-// ============================================
-// CERTIFICATES
-// ============================================
-
-type CertificateProvider = 'acme' | 'aws_acm';
-
-interface CertificateSpec {
-	domains: string[];
-
-	wildcard?: boolean;
-
-	provider: CertificateProvider;
-
-	email: string;
-
-	autoRenew?: boolean;
-}
-
-type CertificateResource = BaseResource<'certificate', CertificateSpec>;
-
-// ============================================
-// DNS
-// ============================================
-
-type DNSRecordType = 'A' | 'AAAA' | 'CNAME' | 'TXT';
-
-interface DNSRecordSpec {
-	zone: string;
-
-	name: string;
-
-	type: DNSRecordType;
-
-	value: string;
-
-	ttl?: number;
-}
-
-type DNSRecordResource = BaseResource<'dns_record', DNSRecordSpec>;
-
-// ============================================
-// STORAGE
-// ============================================
-
-type StorageProvider = 'local' | 's3';
-
-interface LocalStorageSpec {
-	provider: 'local';
-
-	path: string;
-}
-
-interface S3StorageSpec {
-	provider: 's3';
-
-	bucket: string;
-
-	region: string;
-
-	public?: boolean;
-}
-
-type StorageBucketSpec = LocalStorageSpec | S3StorageSpec;
-
-type StorageBucketResource = BaseResource<'storage_bucket', StorageBucketSpec>;
-
-// ============================================
-// STATIC SITES
-// ============================================
-
-interface StaticSiteSpec {
-	buildDirectory: string;
-
-	outputDirectory: string;
-
-	endpointId?: ResourceId;
-
-	storageId?: ResourceId;
-
-	deployOnChange?: boolean;
-}
-
-type StaticSiteResource = BaseResource<'static_site', StaticSiteSpec>;
-
-// ============================================
-// RESOURCE REGISTRY
-// ============================================
-
-type Resource =
-	| EndpointResource
-	| ServiceResource
-	| CertificateResource
-	| DNSRecordResource
-	| StorageBucketResource
-	| StaticSiteResource;
-
-// ============================================
-// RECONCILIATION
-// ============================================
-
-interface ReconciliationResult {
-	success: boolean;
-
-	changed: boolean;
-
-	message?: string;
-
-	warnings?: string[];
-
-	errors?: string[];
-}
-
-interface ReconciliationContext {
-	dryRun?: boolean;
-
-	force?: boolean;
-
-	triggeredBy?: string;
-}
-
-interface ResourceProviderHandler<T extends Resource = Resource> {
-	validate(resource: T): Promise<void>;
-
-	reconcile(resource: T, context: ReconciliationContext): Promise<ReconciliationResult>;
-
-	destroy?(resource: T): Promise<ReconciliationResult>;
-}
-
-// ============================================
-// GENERATED NGINX MODEL
-// ============================================
-
-interface GeneratedNginxConfig {
-	filename: string;
-
-	serverName: string;
-
-	config: string;
-}
-
-// ============================================
-// DEPENDENCY SYSTEM
-// ============================================
-
-interface ResourceReference {
-	kind: ResourceKind;
-
-	id: ResourceId;
-}
-
-interface ResourceDependencyGraph {
-	resourceId: ResourceId;
-
-	dependsOn: ResourceReference[];
-}
-
-// ============================================
-// LOCAL MACHINE STATE
-// ============================================
-
-interface MachineState {
-	nginxInstalled: boolean;
-
-	nginxRunning: boolean;
-
-	acmeInstalled: boolean;
-
-	dockerInstalled: boolean;
-
-	publicIp?: string;
-}
-
-// ============================================
-// AUDIT LOGS
-// ============================================
-
-interface AuditLog {
-	id: string;
-
-	resourceId: ResourceId;
-
-	action: 'create' | 'update' | 'delete' | 'reconcile';
-
-	timestamp: Timestamp;
-
-	success: boolean;
-
-	message?: string;
-}
+export {};
