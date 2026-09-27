@@ -14,6 +14,7 @@ test("GateHouse state export and restore round-trip in an isolated runtime", asy
   try {
     const runtime = await import("../packages/runtime/src/index.ts");
     const db = await import("../packages/db/src/index.ts");
+    const resources = await import("../packages/resources/src/index.ts");
 
     await runtime.ensureRuntime();
     db.initDatabase();
@@ -58,7 +59,7 @@ test("GateHouse state export and restore round-trip in an isolated runtime", asy
       ],
     });
 
-    db.createResource({
+    resources.createResource({
       id: "resource-1",
       kind: "service",
       name: "api",
