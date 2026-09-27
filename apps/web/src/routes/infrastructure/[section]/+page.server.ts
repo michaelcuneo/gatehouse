@@ -560,6 +560,80 @@ export const actions: Actions = {
             form.get('deletionProtection') === 'on'
         }
       };
+    } else if (params.section === 'functions') {
+      stageId = text(form, 'stageId');
+      const selectedStage = stageId ? getManagedStageById(stageId) : null;
+      const functionName = text(form, 'functionName');
+      const region =
+        text(form, 'region') ||
+        selectedStage?.stage.primaryRegion ||
+        '';
+      const runtime = text(form, 'runtime');
+      const handler = text(form, 'handler');
+      const memorySize = Number(text(form, 'memorySize') || 128);
+      const timeout = Number(text(form, 'timeout') || 3);
+      const architecture = text(form, 'architecture') || 'x86_64';
+      const roleArn = text(form, 'roleArn');
+
+      if (!stageId || !selectedStage) {
+        return fail(400, {
+          error: 'A valid project stage is required for Lambda functions.'
+        });
+      }
+
+      if (!functionName || !region) {
+        return fail(400, {
+          error: 'Lambda function name and region are required.'
+        });
+      }
+
+      if (!Number.isInteger(memorySize) || memorySize < 128 || memorySize > 10240) {
+        return fail(400, {
+          error: 'Lambda memory must be an integer between 128 and 10240 MB.'
+        });
+      }
+
+      if (!Number.isInteger(timeout) || timeout < 1 || timeout > 900) {
+        return fail(400, {
+          error: 'Lambda timeout must be between 1 and 900 seconds.'
+        });
+      }
+
+      if (architecture !== 'x86_64' && architecture !== 'arm64') {
+        return fail(400, {
+          error: 'Lambda architecture must be x86_64 or arm64.'
+        });
+      }
+
+      resource = {
+        id: crypto.randomUUID(),
+        kind: 'function',
+        name,
+        provider: 'lambda',
+        version: 1,
+        enabled: true,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          managed: true,
+          ownership: {
+            mode: 'gatehouse'
+          }
+        },
+        spec: {
+          provider: 'lambda',
+          functionName,
+          region,
+          codeMode: 'external',
+          runtime: runtime || undefined,
+          handler: handler || undefined,
+          memorySize,
+          timeout,
+          architecture,
+          roleArn: roleArn || undefined
+        }
+      };
     } else if (params.section === 'static-sites') {
       const deploymentTarget = text(form, 'deploymentTarget') || 'local';
       const buildDirectory = text(form, 'buildDirectory');
