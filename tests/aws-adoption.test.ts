@@ -812,6 +812,10 @@ test("adoption unlock preflight evaluates the proposed stage under the read-only
     stacks: [],
     resources: [],
     warnings: [],
+    coverage: completeCoverage([
+      "ap-southeast-2",
+      "us-east-1",
+    ]),
   } as any;
 
   const ready = evaluateAwsAdoptionUnlockReadiness(
