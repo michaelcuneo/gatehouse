@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import Database from "../packages/db/node_modules/better-sqlite3/lib/index.js";
+import Database from "better-sqlite3";
 
 test("existing stage schemas migrate to read-only adoption mode", async () => {
   const root = fs.mkdtempSync(
