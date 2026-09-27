@@ -43,12 +43,12 @@ export function lambdaConfigurationMatchesDesired(
 
   return (
     config.FunctionName === spec.functionName &&
-    (config.Runtime ?? undefined) === (spec.runtime ?? undefined) &&
-    (config.Handler ?? undefined) === (spec.handler ?? undefined) &&
+    (spec.runtime === undefined || config.Runtime === spec.runtime) &&
+    (spec.handler === undefined || config.Handler === spec.handler) &&
     (config.MemorySize ?? 128) === spec.memorySize &&
     (config.Timeout ?? 3) === spec.timeout &&
     architecture === spec.architecture &&
-    (config.Role ?? undefined) === (spec.roleArn ?? undefined)
+    (spec.roleArn === undefined || config.Role === spec.roleArn)
   );
 }
 
@@ -78,10 +78,11 @@ export async function reconcileLambdaFunctionConfiguration(
   await lambda.send(
     new UpdateFunctionConfigurationCommand({
       FunctionName: spec.functionName,
-      Runtime: spec.runtime as never,
-      Handler: spec.handler,
+      ...(spec.runtime ? { Runtime: spec.runtime as never } : {}),
+      ...(spec.handler ? { Handler: spec.handler } : {}),
       MemorySize: spec.memorySize,
       Timeout: spec.timeout,
+      Architectures: [spec.architecture],
     }),
   );
 }
