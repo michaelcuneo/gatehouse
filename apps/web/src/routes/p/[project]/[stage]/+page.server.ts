@@ -177,7 +177,9 @@ export const actions: Actions = {
       .map((value) => value.trim())
       .filter(Boolean);
     const enabled = checkbox(form, 'enabled');
-    const adoptionMode =
+    const adoptionMode: NonNullable<
+      typeof context.stage.adoptionMode
+    > =
       text(form, 'adoptionMode') === 'enabled'
         ? 'enabled'
         : 'read_only';
