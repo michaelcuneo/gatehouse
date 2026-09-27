@@ -163,6 +163,9 @@ importers:
       '@gatehouse/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@gatehouse/types':
+        specifier: workspace:*
+        version: link:../types
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
