@@ -404,7 +404,9 @@ export function ownershipCandidatesFor(
     resource.region !== "global"
   ) {
     matches = matches.filter(
-      (owner) => owner.region === resource.region,
+      (owner) =>
+        !owner.region ||
+        owner.region === resource.region,
     );
   }
 
