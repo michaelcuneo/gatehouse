@@ -1,74 +1,32 @@
 import { getDatabase } from "./client";
 
-export type StoredResourceStatus =
-  | "pending"
-  | "reconciling"
-  | "ready"
-  | "error"
-  | "disabled";
+import type {
+  BaseResource,
+  ResourceKind,
+  ResourceProvider,
+  ResourceStatus,
+} from "@gatehouse/types";
 
-export type StoredResourceKind =
-  | "endpoint"
-  | "service"
-  | "certificate"
-  | "dns_record"
-  | "storage_bucket"
-  | "static_site"
-  | "database_table"
-  | "function";
+export type StoredResourceStatus = ResourceStatus;
 
-export interface StoredResourceMetadata {
-  description?: string;
-  tags?: string[];
-  managed?: boolean;
-  ownership?: {
-    mode: "gatehouse" | "external" | "observed";
-    externalOwner?: {
-      type: "cloudformation" | "sst" | "cdk" | "unknown";
-      id?: string;
-      name?: string;
-    };
-  };
-  importedFrom?: {
-    provider: "aws";
-    discoveryId: string;
-    physicalId: string;
-    accountId: string;
-    region: string;
-    importedAt: string;
-  };
-  dependsOn?: string[];
-}
+export type StoredResourceKind = ResourceKind;
 
-export interface StoredResourceRuntime {
-  lastReconciledAt?: string;
-  lastError?: string;
-  lastStatusMessage?: string;
-  healthy?: boolean;
-  lastHealthCheckAt?: string;
-  lastHealthMessage?: string;
-}
+export type StoredResourceMetadata = NonNullable<
+  BaseResource<ResourceKind, unknown>["metadata"]
+>;
 
-export interface StoredResource<TSpec = unknown> {
-  id: string;
-  kind: StoredResourceKind;
-  name: string;
-  provider: string;
-  enabled: boolean;
-  status: StoredResourceStatus;
-  version: number;
-  spec: TSpec;
-  metadata?: StoredResourceMetadata;
-  runtime?: StoredResourceRuntime;
-  createdAt: string;
-  updatedAt: string;
-}
+export type StoredResourceRuntime = NonNullable<
+  BaseResource<ResourceKind, unknown>["runtime"]
+>;
+
+export type StoredResource<TSpec = unknown> =
+  BaseResource<ResourceKind, TSpec>;
 
 type ResourceRow = {
   id: string;
   kind: StoredResourceKind;
   name: string;
-  provider: string;
+  provider: ResourceProvider;
   enabled: number;
   status: StoredResourceStatus;
   version: number;
